@@ -1,0 +1,14 @@
+node_modules/
+extension/dist/
+native/target/
+setup/target/
+extension/public/installers/*.exe
+extension/public/installers/*.run
+extension/public/installers/*.zip
+extension/public/installers/*.meta.json
+extension/public/installers/catalog.json
+releases/
+test-results/
+playwright-report/
+.DS_Store
+*.log

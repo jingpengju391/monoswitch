@@ -1,0 +1,16 @@
+{
+  "UUID": "D3293027-2260-44D6-AEC9-3E44016C85AE",
+  "alphanumericSerial": "509RMYA5Z930",
+  "deviceType": "Display",
+  "displayID": "2",
+  "model": "40606",
+  "name": "LG ULTRAGEAR+",
+  "originalName": "LG ULTRAGEAR+",
+  "productName": "LG ULTRAGEAR+",
+  "registryLocation": "IOService:/AppleARMPE/arm-io/AppleT600xIO/dispext0@88000000/AppleCLCD2",
+  "serial": "203930",
+  "tagID": "12",
+  "vendor": "7789",
+  "weekOfManufacture": "9",
+  "yearOfManufacture": "2025"
+}

@@ -1,0 +1,11 @@
+{
+  "extensionName": {
+    "message": "MonoSwitch · One display, two computers"
+  },
+  "extensionDescription": {
+    "message": "Switch a shared display using local DDC/CI control. Supports Windows, macOS, and Linux."
+  },
+  "switchCommand": {
+    "message": "Switch to the other computer"
+  }
+}

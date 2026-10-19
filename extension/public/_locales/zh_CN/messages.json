@@ -1,0 +1,11 @@
+{
+  "extensionName": {
+    "message": "MonoSwitch · 一屏，两台电脑"
+  },
+  "extensionDescription": {
+    "message": "通过本地 DDC/CI 服务切换共用显示器的输入源。支持 Windows、macOS 和 Linux。"
+  },
+  "switchCommand": {
+    "message": "切换到另一台电脑"
+  }
+}

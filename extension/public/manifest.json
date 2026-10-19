@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_extensionName__",
+  "version": "0.1.0",
+  "description": "__MSG_extensionDescription__",
+  "permissions": [
+    "nativeMessaging",
+    "storage",
+    "downloads",
+    "downloads.open"
+  ],
+  "minimum_chrome_version": "123",
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "MonoSwitch",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "background": {
+    "service_worker": "assets/background.js",
+    "type": "module"
+  },
+  "options_ui": {
+    "page": "index.html?settings=1",
+    "open_in_tab": true
+  },
+  "commands": {
+    "switch-peer": {
+      "description": "__MSG_switchCommand__",
+      "suggested_key": {
+        "default": "Alt+Shift+M",
+        "mac": "Alt+Shift+M"
+      }
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7pDnc49uK8y1/sHNEB2FhTvVwTpcMlD3lt5GPtxrFubHsk9r48DWOjfsW5DkWXNdYCskdCvVPVCJHsAHv+kj/ybCzLGrPWZ3Ehp7so9SEXbbkRoz0QjDcYH2b4IsXsx0/4Y+0gFukf2J5amQk7W5Hm9/MLiuf6apSL82oUyAuud8RrMKMbowh26zcp6TbPDlm8xSGlf8gfnRkhiarzVYDTmCInimUMJWKECMd6UR3IEPxS2bxTUjJCGHZIlxBMHDHbfYY1Cs229i2aq7xAR0jEaBy37rwKWGo2Avx0QUX88vwXlT0rRtV8Bf0Y1X2U3glOlAUpidunO4fij7+ua0IQIDAQAB",
+  "default_locale": "en"
+}

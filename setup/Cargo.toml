@@ -1,0 +1,21 @@
+[package]
+name = "monoswitch-setup"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Self-contained per-user installer for MonoSwitch"
+
+[dependencies]
+anyhow = "1"
+directories = "6"
+fs2 = "0.4"
+serde_json = "1"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_UI_WindowsAndMessaging"] }
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1
