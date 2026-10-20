@@ -6,15 +6,26 @@ license = "MIT"
 description = "Local DDC/CI bridge for the MonoSwitch Chrome extension"
 
 [dependencies]
+base64 = "0.22"
 directories = "6"
 fs2 = "0.4"
+getrandom = "0.2"
+if-addrs = "0.14"
 rcgen = "0.13.2"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pemfile = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Devices_Display"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Devices_Display", "Win32_UI_Input_KeyboardAndMouse"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb = { version = "0.13", features = ["xtest"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libloading = "0.8"
 
 [profile.release]
 lto = true

@@ -477,7 +477,7 @@ test.describe('English and Chinese interface', () => {
   })
 })
 
-test('keyboard sharing exports identity, requires confirmation and owns start/stop', async ({ page }) => {
+test('keyboard sharing pairs once with a code and explains when switching is ready', async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 1000 })
   await page.addInitScript(() => {
     const identity = { id: 'ms-' + 'a'.repeat(16), fingerprint: 'a'.repeat(64) }
@@ -493,9 +493,9 @@ test('keyboard sharing exports identity, requires confirmation and owns start/st
           if (!request) return { ok: true, data: {} }
           calls.push(JSON.parse(JSON.stringify(message)))
           if (request.action === 'status') return { ok: true, data: { version: '0.1.0', platform: { os: 'linux', arch: 'x86_64', hostname: 'Manjaro' }, backend: { name: 'ddcutil', available: true }, warnings: [], displays: [{ id: 'test', name: 'Dell', currentInput: 15, canSwitch: true, inputDetection: 'reported', inputs: [{ value: 15, label: 'DP' }, { value: 17, label: 'HDMI' }] }] } }
-          if (request.action === 'sharingIdentity') { sharing.identity = identity; return { ok: true, data: identity } }
-          if (request.action === 'sharingStart') Object.assign(sharing, { running: true, connected: true, active: true })
-          if (request.action === 'sharingStop') Object.assign(sharing, { running: false, connected: false })
+          if (request.action === 'sharingPairHost') Object.assign(sharing, { identity, pairingCode: 'MS2.test-invitation' })
+          if (request.action === 'sharingPairJoin') Object.assign(sharing, { running: true, connected: true, active: true, pairingCode: null })
+          if (request.action === 'sharingStop') Object.assign(sharing, { running: false, connected: false, pairingCode: null })
           return { ok: true, data: structuredClone(sharing) }
         } },
       storage: { local: { get: async () => structuredClone(storage), set: async value => Object.assign(storage, value) }, onChanged: { addListener() {}, removeListener() {} } },
@@ -503,22 +503,20 @@ test('keyboard sharing exports identity, requires confirmation and owns start/st
     })
   })
   await page.goto('/?settings=1')
-  const start = page.getByRole('button', { name: '开启键鼠共享', exact: true })
-  await expect(start).toBeDisabled()
-  await expect(page.getByText('请先点击“准备键鼠配对”，生成本机身份。', { exact: true })).toBeVisible()
-  await page.getByRole('button', { name: '准备键鼠配对' }).click()
-  const exported = await page.getByRole('textbox', { name: '本机导出配置' }).inputValue()
-  expect(JSON.parse(Buffer.from(exported.slice(4), 'base64').toString()).sharing.fingerprint).toBe('a'.repeat(64))
-  await expect(start).toBeDisabled()
-  await expect(page.getByText('请勾选上方的配对确认，允许另一台电脑参与共享。', { exact: true })).toBeVisible()
-  await page.getByLabel('我确认配置来自自己的另一台电脑，允许它参与键鼠共享。').check()
-  await start.click()
-  await expect(page.getByText('已加密连接', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '生成配对码', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '等待另一台输入配对码' })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: '一次性配对码', exact: true })).toHaveValue('MS2.test-invitation')
+  await page.getByRole('button', { name: '取消配对' }).click()
+  const connect = page.getByRole('button', { name: '连接并开启共享', exact: true })
+  await expect(connect).toBeDisabled()
+  await page.getByRole('textbox', { name: '另一台电脑的配对码' }).fill('MS2.peer-code')
+  await connect.click()
+  await expect(page.getByText('已连接，可以切换', { exact: true })).toBeVisible()
   const calls = await page.evaluate(() => window.__sharingCalls)
-  expect(calls.find(call => call.request.action === 'sharingStart')).toMatchObject({ confirmed: true, request: { config: { role: 'server', followDisplay: true, displayId: 'test', input: 15 } } })
+  expect(calls.find(call => call.request.action === 'sharingPairJoin')).toMatchObject({ confirmed: true, request: { code: 'MS2.peer-code' } })
   await page.screenshot({ path: 'docs/screenshots/sharing-connected.png', fullPage: true })
   await page.getByRole('button', { name: '停止键鼠共享', exact: true }).click()
-  await expect(start).toBeVisible()
+  await expect(page.getByRole('button', { name: '生成配对码', exact: true })).toBeVisible()
   await page.screenshot({ path: 'docs/screenshots/sharing-settings.png', fullPage: true })
   await page.getByRole('combobox', { name: /语言|Language/ }).selectOption('en')
   await expect(page.getByRole('heading', { name: 'Keyboard and mouse sharing' })).toBeVisible()

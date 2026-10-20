@@ -105,11 +105,13 @@ fn real_tls_pairing_keyboard_mouse_hotkeys_and_disconnect() {
     let b = sandbox.root.join("receiver");
     let id_a = create_identity(&a).unwrap();
     let id_b = create_identity(&b).unwrap();
-    let port = std::net::TcpListener::bind(("127.0.0.1", 0))
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port();
+    let port = (28000..29000)
+        .step_by(2)
+        .find(|port| {
+            std::net::TcpListener::bind(("127.0.0.1", *port)).is_ok()
+                && std::net::TcpListener::bind(("0.0.0.0", *port + 1)).is_ok()
+        })
+        .expect("free pair of test ports");
     // Loopback is only used in this isolated test. The public API rejects it.
     let config_a = Config {
         role: Role::Server,
@@ -191,7 +193,48 @@ fn real_tls_pairing_keyboard_mouse_hotkeys_and_disconnect() {
     }
     assert!(!window.is_empty());
     xdo(&tools, &display_b, &["windowfocus", &window]);
-    xdo(&tools, &display_a, &["key", "ctrl+shift+F9"]);
+    // Only this isolated test process uses the fake display for generated input.
+    let old_display = std::env::var_os("DISPLAY");
+    unsafe {
+        std::env::set_var("DISPLAY", &display_a);
+    }
+    let alive = Arc::new(AtomicBool::new(true));
+    let state = Arc::new(Mutex::new(Status {
+        running: true,
+        active: true,
+        ..Status::default()
+    }));
+    struct Tail(File, Arc<AtomicBool>);
+    impl Read for Tail {
+        fn read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize> {
+            loop {
+                let n = self.0.read(bytes)?;
+                if n > 0 || !self.1.load(Ordering::Acquire) {
+                    return Ok(n);
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
+    let watcher = monitor(
+        Tail(File::open(&log_a).unwrap(), alive.clone()),
+        state.clone(),
+        alive.clone(),
+        config_a.clone(),
+    );
+    let listener = control::listen(
+        &load_secret(&a).unwrap().unwrap(),
+        &config_a,
+        alive.clone(),
+        state.clone(),
+    )
+    .unwrap();
+    let deadline = Instant::now();
+    while !state.lock().unwrap().connected {
+        assert!(deadline.elapsed() < Duration::from_secs(2));
+        thread::sleep(Duration::from_millis(10));
+    }
+    control::switch(&load_secret(&a).unwrap().unwrap(), &config_a, &state).unwrap();
     wait_log(&log_b, "entering screen");
     xdo(&tools, &display_a, &["key", "a"]);
     wait_log(&log_events, "keysym 0x61, a");
@@ -201,7 +244,21 @@ fn real_tls_pairing_keyboard_mouse_hotkeys_and_disconnect() {
         &["mousemove_relative", "--", "20", "20"],
     );
     wait_log(&log_events, "MotionNotify");
-    xdo(&tools, &display_a, &["key", "ctrl+shift+F8"]);
+    control::switch(&load_secret(&b).unwrap().unwrap(), &config_b, &state).unwrap();
+    // A third computer cannot control focus even if it knows the sender IP.
+    let c = sandbox.root.join("stranger");
+    create_identity(&c).unwrap();
+    assert!(control::switch(&load_secret(&c).unwrap().unwrap(), &config_b, &state).is_err());
+    assert!(state.lock().unwrap().active);
+    alive.store(false, Ordering::Release);
+    watcher.join().unwrap();
+    listener.join().unwrap();
+    unsafe {
+        match old_display {
+            Some(value) => std::env::set_var("DISPLAY", value),
+            None => std::env::remove_var("DISPLAY"),
+        }
+    }
     wait_log(&log_b, "leaving screen");
     // Disconnect receiver and observe sender returning to a disconnected state.
     let mut events = sandbox.children.pop().unwrap();

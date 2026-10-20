@@ -695,6 +695,7 @@ onUnmounted(() => {
                 >{{ t("显示器未报告接口列表。这里列出标准输入源，需按实际接线确认。") }}</span
               >
             </div>
+            <details :open="demoMode"><summary>{{ t("仅切画面时，手动交换配置") }}</summary>
             <div class="export-box">
               <div class="export-heading">
                 <h3>{{ t("本机配置") }}</h3>
@@ -713,7 +714,7 @@ onUnmounted(() => {
                 :placeholder='t("选择显示器与本机接口后，即可生成配置。")'
               />
               <p>{{ t("将这段配置粘贴到另一台电脑的 MonoSwitch。") }}</p>
-            </div>
+            </div></details>
           </section>
 
           <section class="panel">
@@ -748,8 +749,9 @@ onUnmounted(() => {
                 ><Icon name="monitor" :size="32"
               /></span>
               <h3>{{ t("把另一台电脑带进来") }}</h3>
-              <p>{{ t("在另一台电脑完成第 1 步，") }}<br />{{ t("复制它的配置，再粘贴到这里。") }}</p>
+              <p>{{ t("使用下方键鼠共享的一次性配对，会自动添加另一台电脑。") }}</p>
             </div>
+            <details :open="demoMode"><summary>{{ t("仅切画面时，手动交换配置") }}</summary>
             <label class="field"
               ><span>{{
                 t(settings.peer ? '更新对端配置' : '另一台电脑的配置')
@@ -774,7 +776,7 @@ onUnmounted(() => {
                 t(settings.peer ? '更新配置' : '导入配置')
               }}
             </button>
-            <p class="privacy-note">{{ t("系统信息来自对端导出的配置，无法通过视频线自动读取。配置含电脑名、系统和显示器信息，仅保存在本机。") }}</p>
+            <p class="privacy-note">{{ t("系统信息来自对端导出的配置，无法通过视频线自动读取。配置含电脑名、系统和显示器信息，仅保存在本机。") }}</p></details>
           </section>
         </div>
 
@@ -889,7 +891,7 @@ onUnmounted(() => {
             @click="switchComputer"
           >
             <span>{{
-              t(busy ? '正在发送指令…' : sharingRunning ? '仅切换画面' : `切换到 ${settings.peer.name}`)
+              t(busy ? '正在发送指令…' : `切换到 ${settings.peer.name}`)
             }}</span
             ><Icon
               :name="busy ? 'refresh' : 'arrow'"
@@ -908,7 +910,7 @@ onUnmounted(() => {
           <p
             v-else-if="settings.peer && settings.localInput !== null"
             class="action-hint"
-          >{{ t(sharingRunning ? '使用下方快捷键可同时切换键鼠和画面。' : '切换画面；键盘与鼠标保持独立。') }}</p>
+          >{{ t(sharingRunning ? '切换时，键盘和鼠标会一起切到另一台电脑。' : '切换画面；键盘与鼠标保持独立。') }}</p>
         </div>
 
         <div
@@ -931,7 +933,7 @@ onUnmounted(() => {
           }}</span>
         </div>
 
-        <SharingPanel :host="status" :settings="settings" :compact="!settingsPage"
+        <SharingPanel :profile="ownProfile" :host="status" :settings="settings" :compact="!settingsPage"
           @identity="sharingIdentity = $event" @running="sharingRunning = $event"
           @upgrade="upgrading = true; checkInstallation()" />
         <section v-if="settingsPage && !demoMode" class="panel">

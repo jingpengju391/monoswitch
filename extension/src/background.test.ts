@@ -64,6 +64,7 @@ beforeEach(async () => {
     storage: {
       local: {
         get: vi.fn(async () => ({ [SETTINGS_KEY]: state.settings })),
+        remove: vi.fn(async (key: string) => { delete saved[key] }),
         set: vi.fn(async (value: Record<string, unknown>) => {
           Object.assign(saved, value)
         }),
@@ -190,4 +191,40 @@ it('requires explicit confirmation before sharing installation, pairing or captu
     expect(await send({ action })).toMatchObject({ ok: false, error: { code: 'INVALID_REQUEST' } })
   }
   expect(nativeCalls).toHaveLength(0)
+})
+
+it('waits for confirmed input focus before switching the display', async () => {
+  const config = { role: 'server' as const, peer: { id: 'ms-' + 'a'.repeat(16), fingerprint: 'a'.repeat(64) }, address: '', port: 24800, followDisplay: true, displayId: 'monitor-1', input: 15 }
+  const start = send({ action: 'sharingStart', config }, true)
+  await vi.waitFor(() => expect(nativeCalls.at(-1)?.action).toBe('sharingStart'))
+  repairReply({ ok: true, data: { running: true } })
+  await start
+  const switching = send({ action: 'switch', displayId: 'monitor-1', input: 17 }, true)
+  await vi.waitFor(() => expect(nativeCalls.at(-1)?.action).toBe('sharingStatus'))
+  repairReply({ ok: true, data: { running: true, connected: true } })
+  await vi.waitFor(() => expect(nativeCalls.at(-1)?.action).toBe('sharingSwitch'))
+  expect(nativeCalls.some(call => call.action === 'switch')).toBe(false)
+  repairReply({ ok: false, error: { code: 'SHARING_FAILED', message: 'Input did not switch' } })
+  expect(await switching).toMatchObject({ ok: false })
+  expect(nativeCalls.some(call => call.action === 'switch')).toBe(false)
+  const retry = send({ action: 'switch', displayId: 'monitor-1', input: 17 }, true)
+  await vi.waitFor(() => expect(nativeCalls.at(-1)?.action).toBe('sharingStatus'))
+  repairReply({ ok: true, data: { running: true, connected: true } })
+  await vi.waitFor(() => expect(nativeCalls.at(-1)?.action).toBe('sharingSwitch'))
+  repairReply({ ok: true, data: { accepted: true } })
+  expect(await retry).toMatchObject({ ok: true })
+  expect(nativeCalls.at(-1)?.action).toBe('switch')
+})
+
+it('one-time join saves the peer and automatically starts the receiver', async () => {
+  const peer = { ...state.settings.peer!, sharing: { id: 'ms-' + 'b'.repeat(16), fingerprint: 'b'.repeat(64) } }
+  const joined = send({ action: 'sharingPairJoin', code: 'MS2.test', profile: peer }, true)
+  await vi.waitFor(() => expect(nativeCalls.at(-1)?.action).toBe('sharingPairJoin'))
+  repairReply({ ok: true, data: { peer, address: '192.168.1.2', port: 24800 } })
+  await vi.waitFor(() => expect(nativeCalls.at(-1)?.action).toBe('sharingStart'))
+  expect(nativeCalls.at(-1)).toMatchObject({ config: { role: 'client', address: '192.168.1.2', peer: peer.sharing } })
+  repairReply({ ok: true, data: { running: true } })
+  expect(await joined).toMatchObject({ ok: true })
+  expect(saved[SETTINGS_KEY]).toMatchObject({ peer })
+  expect(saved['monoswitch.sharingResume']).toMatchObject({ role: 'client' })
 })

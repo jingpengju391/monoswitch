@@ -46,6 +46,9 @@ export type NativeRequest =
   | { action: 'sharingInstall' }
   | { action: 'sharingStart'; config: SharingConfig }
   | { action: 'sharingStop' }
+  | { action: 'sharingSwitch' }
+  | { action: 'sharingPairHost'; profile: ComputerProfile }
+  | { action: 'sharingPairJoin'; code: string; profile: ComputerProfile }
   | { action: 'repair' }
   | { action: 'switch'; displayId: string; input: number }
 
@@ -80,7 +83,10 @@ export interface SharingConfig {
   displayId: string
   input: number
 }
+export interface PairedComputer { peer: ComputerProfile; address: string; port: number }
 export interface SharingStatus {
+  pairingCode?: string | null
+  paired?: PairedComputer | null
   installed: boolean
   running: boolean
   connected: boolean

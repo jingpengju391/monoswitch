@@ -1,6 +1,9 @@
 //! Owns a Deskflow child for the lifetime of a Native Messaging connection.
 //! Deskflow remains a separate executable; no third-party source is embedded.
 use crate::model::AppError;
+mod control;
+mod focus;
+pub mod pairing;
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -73,7 +76,7 @@ pub struct Config {
 }
 impl Config {
     fn validate(&self, own: &Identity) -> Result<(), AppError> {
-        if !self.peer.valid() || self.peer.id == own.id || self.port < 1024 {
+        if !self.peer.valid() || self.peer.id == own.id || self.port < 1024 || self.port == 65535 {
             return Err(failure("键鼠配对配置无效，请重新交换配置。"));
         }
         if self.role == Role::Client || !self.address.is_empty() {
@@ -104,6 +107,8 @@ impl Config {
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
+    pub pairing_code: Option<String>,
+    pub paired: Option<pairing::Paired>,
     pub installed: bool,
     pub running: bool,
     pub connected: bool,
@@ -266,7 +271,7 @@ fn event(line: &str, peer: &Identity) -> Option<Event> {
         Some(Event::Enter)
     } else if matches!(message, "leaving screen" | "leaving computer") {
         Some(Event::Leave)
-    } else if line.contains("ERROR:") || line.contains("FATAL:") {
+    } else if line.contains("ERROR:") || line.contains("FATAL:") || line.contains("WARNING:") {
         Some(Event::Error)
     } else {
         None
@@ -326,6 +331,8 @@ fn monitor(
 
 #[derive(Default)]
 pub struct Session {
+    pairing: Option<pairing::Pairing>,
+    config: Option<Config>,
     child: Option<Child>,
     lock: Option<File>,
     threads: Vec<JoinHandle<()>>,
@@ -333,6 +340,32 @@ pub struct Session {
     state: Arc<Mutex<Status>>,
 }
 impl Session {
+    pub fn pair_host(&mut self, profile: serde_json::Value) -> Result<Status, AppError> {
+        self.stop();
+        self.pairing = Some(pairing::host(profile, 24800)?);
+        self.status()
+    }
+    pub fn pair_join(
+        &mut self,
+        code: &str,
+        profile: serde_json::Value,
+    ) -> Result<pairing::Paired, AppError> {
+        self.stop();
+        pairing::join(code, profile)
+    }
+
+    pub fn switch_peer(&mut self) -> Result<(), AppError> {
+        let state = self.status()?;
+        if !state.running || !state.connected {
+            return Err(failure("另一台电脑尚未连入键鼠共享，未切换画面。"));
+        }
+        let config = self
+            .config
+            .as_ref()
+            .ok_or_else(|| failure("请先开启键鼠共享。"))?;
+        let secret = load_secret(&root()?)?.ok_or_else(|| failure("请先生成本机键鼠配对信息。"))?;
+        control::switch(&secret, config, &self.state)
+    }
     pub fn status(&mut self) -> Result<Status, AppError> {
         if let Some(child) = self.child.as_mut()
             && let Some(exit) = child.try_wait().map_err(io_error)?
@@ -345,14 +378,30 @@ impl Session {
                 .get_or_insert_with(|| format!("键鼠共享程序已退出（{exit}），请检查权限和连接。"));
         }
         let mut state = self.state.lock().unwrap().clone();
+        if let Some(pairing) = &self.pairing {
+            state.paired = pairing.result();
+            if !pairing.expired() && state.paired.is_none() {
+                state.pairing_code = Some(pairing.code.clone());
+            } else if pairing.expired() && state.paired.is_none() {
+                state.last_error = Some("配对码已过期，请重新生成。".into());
+            }
+        }
         state.installed = backend().is_some();
         state.identity = load_secret(&root()?)?.map(|s| s.identity());
         Ok(state)
     }
     pub fn start(&mut self, config: Config) -> Result<Status, AppError> {
+        let result = self.start_inner(config);
+        if let Err(error) = &result {
+            self.state.lock().unwrap().last_error = Some(error.message.clone());
+        }
+        result
+    }
+    fn start_inner(&mut self, config: Config) -> Result<Status, AppError> {
         if self.child.is_some() {
             return Err(failure("请先停止当前键鼠共享，再修改配置。"));
         }
+        self.pairing = None;
         let root = root()?;
         let own = load_secret(&root)?.ok_or_else(|| failure("请先生成本机键鼠配对信息。"))?;
         config.validate(&own.identity())?;
@@ -381,6 +430,7 @@ impl Session {
             command.creation_flags(0x08000000);
         }
         let mut child = command.spawn().map_err(io_error)?;
+        self.config = Some(config.clone());
         self.alive.store(true, Ordering::Release);
         *self.state.lock().unwrap() = Status {
             installed: true,
@@ -403,14 +453,24 @@ impl Session {
                 stderr,
                 self.state.clone(),
                 self.alive.clone(),
-                config,
+                config.clone(),
             ));
         }
         self.child = Some(child);
         self.lock = Some(lock);
+        if config.role == Role::Server {
+            match control::listen(&own, &config, self.alive.clone(), self.state.clone()) {
+                Ok(thread) => self.threads.push(thread),
+                Err(error) => {
+                    self.stop();
+                    return Err(error);
+                }
+            }
+        }
         self.status()
     }
     pub fn stop(&mut self) {
+        self.pairing = None;
         self.alive.store(false, Ordering::Release);
         if let Some(mut child) = self.child.take() {
             let _ = child.kill();
@@ -420,6 +480,7 @@ impl Session {
             let _ = thread.join();
         }
         self.lock = None;
+        self.config = None;
         let mut state = self.state.lock().unwrap();
         state.running = false;
         state.connected = false;
@@ -528,7 +589,7 @@ mod tests {
         );
         assert_eq!(
             event("[time] WARNING: failed to connect to server", &peer()),
-            None
+            Some(Event::Error)
         );
         assert_eq!(
             event("[time] ERROR: unknown fingerprint", &peer()),

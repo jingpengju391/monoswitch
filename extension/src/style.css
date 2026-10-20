@@ -1159,3 +1159,6 @@ html[lang="en"] .install-steps small { line-height: 1.5; }
 .sharing-shortcuts { display: flex; flex-wrap: wrap; gap: 16px; margin: 16px 0; }
 .sharing-shortcuts span { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .sharing-shortcuts kbd { border: 1px solid #dce4df; border-radius: 6px; padding: 6px 9px; background: #f6f7f4; }
+.sharing-panel + .panel { margin-top: 20px; }
+.sharing-fields > div > h3 { font-size: 15px; margin-bottom: 8px; }
+.sharing-fields > div > p { font-size: 13px; margin-bottom: 14px; line-height: 1.6; }

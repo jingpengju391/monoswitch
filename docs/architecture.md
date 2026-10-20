@@ -62,8 +62,10 @@ TypeScript 合约位于 `shared/protocol.ts`。Native Messaging 使用本机字�
 
 ## 可选键鼠共享
 
-显示器控制仍独立工作；键鼠共享需要两机局域网互通。扩展后台通过一个长连接 Native Messaging port 管理 Rust `sharing::Session`。Session 独占配置锁并拥有独立 Deskflow 子进程；弹窗关闭不终止后台连接，显式停止或原生连接 EOF 时杀死并回收子进程。启动失败、断线和退出分别反馈，进程启动不等于已连接。
+显示器控制独立工作；键鼠共享需要两机局域网互通。后台通过长连接 Native Messaging port 管理 Rust Session 和其 Deskflow 子进程。弹窗关闭不停止共享。显式停止或原生连接 EOF 回收子进程和网络监听；成功配对配置保存在 Chrome 本地存储，后台初始化按原配对恢复，显式停止清除自动恢复授权。
 
-Deskflow 是外部程序，不复制其源码、不修改用户现有 Deskflow 配置。MonoSwitch 数据目录下单独保存 TLS 私钥、证书和 INI 配置。MS1 配置可选携带 SHA-256 指纹及由指纹派生的身份；双方仅信任对端证书，关闭剪贴板。旧 MS1 配置仍可用于显示器切换。固定热键在 Deskflow 内切换焦点，Rust 读取 INFO/IPC 焦点记录并按用户选项发送本机 DDC 命令；不抓取或记录按键内容。
+首次配对使用 MS2 邀请：发送端临时监听 TCP 24801，生成随机 256 位、五分钟、单次使用凭据，附本机公开配置、证书指纹与局域网 IPv4 候选地址。接收端粘贴后通过固定指纹 TLS 提交凭据与公开身份；双方自动保存电脑配置并分别启动 server/client。配对阶段无客户端证书认证，授权依据加密传输的一次性凭据；后续共享和控制均验证已配对双方的证书。私钥不进入 Chrome 配置或配对码。
 
-Linux 用固定 pkexec 脚本安装发行版 Deskflow 软件包。Windows/macOS 提供官方下载入口。网络端口默认 TCP 24800，可配置；接收端地址限私有 IPv4、IPv4 链路本地或 IPv6 ULA。无需账号、外部服务器或 HTTP 控制接口。相关协议依据 [Deskflow 1.26 配置文档](https://github.com/deskflow/deskflow/blob/v1.26.0/docs/Configuration.md)。
+Deskflow 是外部程序，使用 MonoSwitch 独立配置目录，不修改已有 Deskflow 配置。TCP 24800 传输输入；正常共享期间 TCP 24801 使用 rustls 双向认证，仅接受固定的发送端/接收端焦点操作。X11 通过 XTEST、Windows 通过 SendInput、macOS 通过 CGEvent 触发固定内部热键；服务器观察 Deskflow 焦点日志确认成功。主按钮先请求焦点切换，失败不主动切显示器；成功后发送当前主机 DDC 命令，焦点进入日志也可触发接收主机 DDC。外部实体按键切显示输入不在此控制链路中。
+
+不捕获或记录按键内容，关闭剪贴板；解析有长度限制。输入焦点和显示器 DDC 是独立系统，DDC 失败仍有明确提示，不能把发送指令当作画面已验证。Wayland 发送端按钮联动明确报不支持，Windows/macOS 需要真机权限验证。

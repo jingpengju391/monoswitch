@@ -11,6 +11,14 @@ pub enum Request {
         config: crate::sharing::Config,
     },
     SharingStop {},
+    SharingSwitch {},
+    SharingPairHost {
+        profile: serde_json::Value,
+    },
+    SharingPairJoin {
+        code: String,
+        profile: serde_json::Value,
+    },
     Repair {},
     Switch {
         #[serde(rename = "displayId")]
