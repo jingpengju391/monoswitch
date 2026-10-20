@@ -144,7 +144,7 @@ test('installed backend still shows its actionable setup hint when detection fai
 })
 
 test('compact control panel, explicit demo and safe switch feedback', async ({ page }) => {
-  await page.setViewportSize({ width: 600, height: 700 })
+  await page.setViewportSize({ width: 780, height: 700 })
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
   await page.goto('/?demo=1&popup=1')
@@ -583,3 +583,34 @@ test('one page keeps daily controls visible and secondary setup collapsed at nar
   await expect(page.getByRole('button', { name: '切换到 MacBook Pro', exact: true })).toBeVisible()
   await expect(page.locator('.advanced-options')).not.toHaveAttribute('open')
 })
+
+for (const fails of [false, true]) {
+  test(`small window closes only its source tab after successful creation: failure ${fails}`, async ({ page }) => {
+    await mockInstallerDownloads(page)
+    await page.addInitScript(() => {
+      window.__windowCalls = []
+      chrome.tabs = {
+        getCurrent: async () => ({ id: 42 }),
+        remove: async id => window.__windowCalls.push({ action: 'close', id }),
+      }
+      chrome.windows = {
+        create: options => new Promise((resolve, reject) => {
+          window.__windowCalls.push({ action: 'open', options })
+          window.__finishWindow = fails => fails ? reject(new Error('blocked')) : resolve({ id: 7 })
+        }),
+      }
+    })
+    await page.goto('/')
+    await page.getByRole('button', { name: '打开小窗口', exact: true }).click()
+    await expect(page.getByRole('button', { name: '打开小窗口', exact: true })).toBeDisabled()
+    expect(await page.evaluate(() => window.__windowCalls.map(call => call.action))).toEqual(['open'])
+    await page.evaluate(fails => window.__finishWindow(fails), fails)
+    if (fails) {
+      await expect(page.getByRole('alert')).toContainText('无法打开小窗口')
+      expect(await page.evaluate(() => window.__windowCalls.map(call => call.action))).toEqual(['open'])
+    } else {
+      await expect.poll(() => page.evaluate(() => window.__windowCalls.at(-1))).toEqual({ action: 'close', id: 42 })
+      expect(await page.evaluate(() => window.__windowCalls[0].options.url)).toContain('index.html?popup=1&window=1')
+    }
+  })
+}

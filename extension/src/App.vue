@@ -36,6 +36,7 @@ import { createInstallerDownload } from './installer-download'
 import { REPAIR_KEY, readRepairProgress } from './system-setup'
 
 const popupMode = new URLSearchParams(location.search).get('popup') === '1'
+const detachedMode = new URLSearchParams(location.search).get('window') === '1'
 const status = ref<HostStatus | null>(null)
 const sharingIdentity = ref<SharingIdentity | null>(null)
 const sharingRunning = ref(false)
@@ -323,10 +324,13 @@ async function openSmallWindow(): Promise<void> {
   openingPopup.value = true
   try {
     if (isExtension) {
-      try { await chrome.action.openPopup() }
-      catch {
-        await chrome.windows.create({ url: chrome.runtime.getURL('index.html?popup=1'), type: 'popup', width: 620, height: 640 })
-      }
+      await settingsSync.flush()
+      const current = await chrome.tabs.getCurrent()
+      await chrome.windows.create({
+        url: chrome.runtime.getURL('index.html?popup=1&window=1'), type: 'popup',
+        width: Math.min(980, screen.availWidth), height: Math.min(760, screen.availHeight),
+      })
+      if (current?.id !== undefined) await chrome.tabs.remove(current.id)
     } else {
       const url = new URL(location.href)
       url.searchParams.set('popup', '1')
@@ -342,6 +346,7 @@ function openFullPage(): void {
   else {
     const url = new URL(location.href)
     url.searchParams.delete('popup')
+    url.searchParams.delete('window')
     location.href = url.href
   }
 }
@@ -413,7 +418,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div :class="['app', 'unified-page', { onboarding: showSetup, 'popup-page': popupMode }]">
+  <div :class="['app', 'unified-page', { onboarding: showSetup, 'popup-page': popupMode, 'detached-page': detachedMode }]">
     <div v-if="demoMode" class="demo-banner"><span class="demo-dot"></span>{{ t('演示模式 · 不会控制真实显示器') }}</div>
     <header class="app-header">
       <div class="brand"><span class="brand-mark"><Icon name="monitor" :size="23" /></span><span>MonoSwitch<span class="brand-period">.</span></span></div>
