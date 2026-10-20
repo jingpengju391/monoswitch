@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeRequest } from '../../shared/protocol'
+import manifest from '../public/manifest.json'
 import { fixtures } from './test-fixtures'
 import { OPERATION_KEY, SETTINGS_KEY } from './state'
 import { REPAIR_KEY } from './system-setup'
@@ -11,6 +12,7 @@ let onMessage: (
   callback: (result: unknown) => void,
 ) => boolean
 let onCommand: (command: string) => void
+let onAction: () => void
 let nativeCalls: NativeRequest[]
 let saved: Record<string, unknown>
 let delaySwitch: ((response: unknown) => void) | null
@@ -70,6 +72,7 @@ beforeEach(async () => {
         }),
       },
     },
+    action: { onClicked: { addListener: (listener: typeof onAction) => { onAction = listener } } },
     commands: {
       onCommand: {
         addListener: (listener: typeof onCommand) => {
@@ -227,4 +230,11 @@ it('one-time join saves the peer and automatically starts the receiver', async (
   expect(await joined).toMatchObject({ ok: true })
   expect(saved[SETTINGS_KEY]).toMatchObject({ peer })
   expect(saved['monoswitch.sharingResume']).toMatchObject({ role: 'client' })
+})
+
+it('opens the full page from the toolbar instead of a popup', () => {
+  expect(manifest.action).not.toHaveProperty('default_popup')
+  expect(manifest.options_ui).toEqual({ page: 'index.html', open_in_tab: true })
+  onAction()
+  expect(chrome.runtime.openOptionsPage).toHaveBeenCalledOnce()
 })

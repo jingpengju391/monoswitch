@@ -271,10 +271,15 @@ chrome.runtime.onMessage.addListener(
 )
 
 chrome.commands.onCommand.addListener((command) => {
-  // A shortcut cannot confirm unreported monitor inputs; use the popup for those.
+  // A shortcut cannot confirm unreported monitor inputs; use the full page for those.
   if (command === 'switch-peer') void switchPeer(false)
 })
 
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') void chrome.runtime.openOptionsPage()
+})
+
+// Chrome opens or focuses the existing options tab instead of a transient popup.
+chrome.action.onClicked.addListener(() => {
+  void chrome.runtime.openOptionsPage()
 })
