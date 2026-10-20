@@ -13,6 +13,7 @@ withDefaults(
       | 'info'
       | 'laptop'
       | 'external'
+      | 'minimize'
     size?: number
   }>(),
   { size: 20 },
@@ -38,6 +39,7 @@ const paths = {
   close: ['m6 6 12 12M6 18 18 6'],
   info: ['M12 11v6M12 7v.01', 'M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0'],
   laptop: ['M5 4h14v12H5z', 'M2 20h20l-3-4H5z'],
+  minimize: ['M21 3l-7 7m0-6v6h6', 'M3 21l7-7m-6 0h6v6'],
   external: ['M14 3h7v7M21 3l-9 9', 'M10 3H3v18h18v-7'],
 }
 </script>

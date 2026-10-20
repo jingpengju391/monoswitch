@@ -1,4 +1,7 @@
 export const english: Record<string, string> = {
+  "打开小窗口": "Open popup",
+  "无法打开小窗口，请点击浏览器工具栏中的 MonoSwitch 图标。": "Cannot open the popup. Click MonoSwitch in the browser toolbar.",
+  "打开完整页面": "Open full page",
   "已复制": "Copied",
   "正在复制…": "Copying…",
   "显示器序列号不一致。请确认两台电脑连接同一显示器后重新配对。": "Monitor serial numbers differ. Connect both computers to the same monitor and pair again.",

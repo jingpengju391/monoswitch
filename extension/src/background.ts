@@ -291,8 +291,3 @@ chrome.commands.onCommand.addListener((command) => {
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') void chrome.runtime.openOptionsPage()
 })
-
-// Chrome opens or focuses the existing options tab instead of a transient popup.
-chrome.action.onClicked.addListener(() => {
-  void chrome.runtime.openOptionsPage()
-})

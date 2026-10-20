@@ -11,6 +11,7 @@
   ],
   "minimum_chrome_version": "123",
   "action": {
+    "default_popup": "index.html?popup=1",
     "default_title": "MonoSwitch",
     "default_icon": {
       "16": "icons/16.png",

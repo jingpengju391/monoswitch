@@ -147,7 +147,7 @@ test('compact control panel, explicit demo and safe switch feedback', async ({ p
   await page.setViewportSize({ width: 600, height: 700 })
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
-  await page.goto('/?demo=1')
+  await page.goto('/?demo=1&popup=1')
   await expect(page.getByText('Manjaro Linux', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: '切换到 MacBook Pro' }).click()
   await expect(page.getByText('这是界面演示，没有发送显示器切换指令。')).toBeVisible()
@@ -155,7 +155,14 @@ test('compact control panel, explicit demo and safe switch feedback', async ({ p
   expect(errors).toEqual([])
   await page.getByRole('button', { name: '关闭提示' }).click()
   await mkdir('docs/screenshots', { recursive: true })
-  await page.screenshot({ path: 'docs/screenshots/control.png', fullPage: true })
+  await page.screenshot({ path: 'docs/screenshots/control-popup.png', fullPage: true })
+  await page.getByRole('button', { name: '打开完整页面', exact: true }).click()
+  await expect(page.locator('.popup-page')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '切换到 MacBook Pro' })).toBeVisible()
+  await expect(page).toHaveURL(/\?demo=1$/)
+  await page.getByRole('button', { name: '打开小窗口', exact: true }).click()
+  await expect(page.locator('.popup-page')).toBeVisible()
+  await expect(page.getByRole('button', { name: '切换到 MacBook Pro' })).toBeVisible()
 })
 
 test('local configuration is generated automatically instead of exposing manual exchange', async ({ page }) => {

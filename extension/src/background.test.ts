@@ -12,7 +12,6 @@ let onMessage: (
   callback: (result: unknown) => void,
 ) => boolean
 let onCommand: (command: string) => void
-let onAction: () => void
 let onSettingsChanged: (changes: Record<string, chrome.storage.StorageChange>, area: string) => void
 let nativeCalls: NativeRequest[]
 let saved: Record<string, unknown>
@@ -74,7 +73,6 @@ beforeEach(async () => {
         }),
       },
     },
-    action: { onClicked: { addListener: (listener: typeof onAction) => { onAction = listener } } },
     commands: {
       onCommand: {
         addListener: (listener: typeof onCommand) => {
@@ -234,11 +232,9 @@ it('one-time join saves the peer and automatically starts the receiver', async (
   expect(saved['monoswitch.sharingResume']).toMatchObject({ role: 'client' })
 })
 
-it('opens the full page from the toolbar instead of a popup', () => {
-  expect(manifest.action).not.toHaveProperty('default_popup')
+it('offers a toolbar popup and a separate full page', () => {
+  expect(manifest.action.default_popup).toBe('index.html?popup=1')
   expect(manifest.options_ui).toEqual({ page: 'index.html', open_in_tab: true })
-  onAction()
-  expect(chrome.runtime.openOptionsPage).toHaveBeenCalledOnce()
 })
 
 

@@ -35,6 +35,7 @@ import { createSettingsSync } from './settings-sync'
 import { createInstallerDownload } from './installer-download'
 import { REPAIR_KEY, readRepairProgress } from './system-setup'
 
+const popupMode = new URLSearchParams(location.search).get('popup') === '1'
 const status = ref<HostStatus | null>(null)
 const sharingIdentity = ref<SharingIdentity | null>(null)
 const sharingRunning = ref(false)
@@ -316,6 +317,35 @@ async function switchComputer(): Promise<void> {
   }
 }
 
+const openingPopup = ref(false)
+async function openSmallWindow(): Promise<void> {
+  if (openingPopup.value) return
+  openingPopup.value = true
+  try {
+    if (isExtension) {
+      try { await chrome.action.openPopup() }
+      catch {
+        await chrome.windows.create({ url: chrome.runtime.getURL('index.html?popup=1'), type: 'popup', width: 620, height: 640 })
+      }
+    } else {
+      const url = new URL(location.href)
+      url.searchParams.set('popup', '1')
+      location.href = url.href
+    }
+  } catch {
+    error.value = '无法打开小窗口，请点击浏览器工具栏中的 MonoSwitch 图标。'
+  } finally { openingPopup.value = false }
+}
+
+function openFullPage(): void {
+  if (isExtension) void chrome.runtime.openOptionsPage()
+  else {
+    const url = new URL(location.href)
+    url.searchParams.delete('popup')
+    location.href = url.href
+  }
+}
+
 function openShortcuts(): void {
   if (isExtension)
     void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' })
@@ -383,13 +413,15 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div :class="['app', 'unified-page', { onboarding: showSetup }]">
+  <div :class="['app', 'unified-page', { onboarding: showSetup, 'popup-page': popupMode }]">
     <div v-if="demoMode" class="demo-banner"><span class="demo-dot"></span>{{ t('演示模式 · 不会控制真实显示器') }}</div>
     <header class="app-header">
       <div class="brand"><span class="brand-mark"><Icon name="monitor" :size="23" /></span><span>MonoSwitch<span class="brand-period">.</span></span></div>
       <select class="language-select" aria-label="Language / 语言" :value="locale" @change="setLocale(($event.target as HTMLSelectElement).value)">
         <option value="zh-CN">中文</option><option value="en">English</option>
       </select>
+      <button v-if="popupMode" class="text-button view-toggle" @click="openFullPage"><Icon name="external" :size="18" />{{ t('打开完整页面') }}</button>
+      <button v-else class="text-button view-toggle" :disabled="openingPopup" @click="openSmallWindow"><Icon name="minimize" :size="18" />{{ t('打开小窗口') }}</button>
     </header>
     <main>
       <div v-if="notice" class="message success" role="status"><Icon name="check" :size="17" /><span>{{ t(notice) }}</span><button class="dismiss" :aria-label="t('关闭提示')" @click="notice = ''"><Icon name="close" :size="14" /></button></div>
