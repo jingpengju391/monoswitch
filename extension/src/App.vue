@@ -511,11 +511,13 @@ onUnmounted(() => {
             <Icon name="arrow" :size="20" />
             <div><span class="small-label">{{ t(settings.peer ? '对端' : '待连接') }}</span><strong>{{ settings.peer?.name || t('另一台电脑') }}</strong><small>{{ settings.peer ? platformLabel(settings.peer.platform) : t('首次配对后，自动连接') }}</small></div>
           </div>
+          <div class="control-action">
           <label v-if="display?.inputDetection === 'standard' && settings.peer" class="confirmation"><input v-model="confirmed" type="checkbox" /><span>{{ t('我确认另一台电脑连接在') }}<strong>{{ t(peerLabel) }}</strong>{{ t('。显示器未报告可用接口。') }}</span></label>
           <button v-if="settings.peer && localReady" class="primary-button switch-button" :disabled="!!block || busy || refreshing" @click="switchComputer">
             <span>{{ t(busy ? '正在发送指令…' : `切换到 ${settings.peer.name}`) }}</span><Icon :name="busy ? 'refresh' : 'arrow'" :class="{ spinning: busy }" :size="19" />
           </button>
           <p class="action-hint">{{ t(settings.peer && localReady ? block || (sharingRunning ? '画面、鼠标和键盘一起切换' : '切换画面；键盘与鼠标保持独立。') : localReady ? '在下方完成一次配对，即可切换。' : '先选择这台电脑连接的显示器接口。') }}</p>
+          </div>
           <div v-if="visibleOperation" :class="['message', visibleOperation.state === 'failed' ? 'danger' : 'success']" role="status">
             <Icon :name="visibleOperation.state === 'failed' ? 'info' : 'check'" :size="17" /><span>{{ diagnostic(visibleOperation.state === 'accepted' ? '切换指令已发送，尚未验证画面。可刷新读取当前输入。' : visibleOperation.state === 'pending' ? '上次操作正在发送，请刷新确认状态。' : visibleOperation.message) }}</span>
           </div>
@@ -550,6 +552,10 @@ onUnmounted(() => {
         </div>
 
 
+        <div class="workspace-grid" :class="{ 'setup-pending': !localReady && !sharingRunning }">
+        <SharingPanel v-show="localReady || sharingRunning" :profile="ownProfile" :host="status"
+          @identity="sharingIdentity = $event" @running="sharingRunning = $event" @upgrade="upgrading = true; checkInstallation()" />
+          <div class="settings-stack">
         <details class="panel local-settings" :open="!localReady">
           <summary>{{ t(localReady ? '显示器与接口' : '选择本机接口') }}<span v-if="localReady">{{ display?.name }} · {{ t(inputLabel(display, settings.localInput)) }}</span></summary>
           <p class="privacy-note">{{ t('系统信息由本地服务自动识别') }}</p>
@@ -563,8 +569,6 @@ onUnmounted(() => {
         </details>
         <div v-if="display?.warning" class="message warning">{{ diagnostic(display.warning) }}</div>
         <div v-if="sourceMismatch" class="message danger">{{ t('显示器序列号不一致。请确认两台电脑连接同一显示器后重新导出配置。') }}</div>
-        <SharingPanel v-show="localReady || sharingRunning" :profile="ownProfile" :host="status"
-          @identity="sharingIdentity = $event" @running="sharingRunning = $event" @upgrade="upgrading = true; checkInstallation()" />
         <details class="panel advanced-options">
           <summary>{{ t('更多选项') }}</summary>
           <label class="field"><span>{{ t('电脑名称') }}</span><input v-model="settings.localName" :placeholder="status.platform.hostname" maxlength="60" /></label>
@@ -579,6 +583,8 @@ onUnmounted(() => {
           <p v-if="monitorUnverified" class="privacy-note">{{ t('缺少显示器序列号，无法核对是否为同一台显示器。请按实际接线确认。') }}</p>
           <button v-if="settings.peer && !sharingRunning" class="text-button" @click="settings.peer = null">{{ t('移除另一台电脑') }}</button>
         </details>
+          </div>
+        </div>
       </template>
     </main>
     <footer class="app-footer"><span class="footer-status"><i :class="{ connected: ready }"></i>{{ t(ready ? '本地连接' : '等待连接') }}</span><button class="shortcut" :title="t('设置键盘快捷键')" @click="openShortcuts">{{ t(shortcut) }}<Icon name="external" :size="12" /></button></footer>

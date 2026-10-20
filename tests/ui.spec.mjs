@@ -556,7 +556,7 @@ test('installed users can reopen downloads without old host dismissing the page'
 })
 
 test('one page keeps daily controls visible and secondary setup collapsed at narrow widths', async ({ page }) => {
-  for (const width of [320, 440, 680]) {
+  for (const width of [320, 440, 680, 960, 1440, 1920]) {
     await page.setViewportSize({ width, height: 800 })
     await page.goto('/?demo=1')
     await expect(page.getByRole('button', { name: '切换到 MacBook Pro', exact: true })).toBeVisible()
@@ -566,7 +566,15 @@ test('one page keeps daily controls visible and secondary setup collapsed at nar
     await page.getByLabel('Language / 语言').selectOption('en')
     await expect(page.getByRole('button', { name: 'Switch to MacBook Pro', exact: true })).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    const layout = await page.locator('.workspace-grid').evaluate(el => {
+      const sharing = el.querySelector('.sharing-panel').getBoundingClientRect()
+      const settings = el.querySelector('.settings-stack').getBoundingClientRect()
+      return { width: el.getBoundingClientRect().width, sideBySide: settings.left >= sharing.right }
+    })
+    expect(layout.width).toBeGreaterThan(width * 0.8)
+    expect(layout.sideBySide).toBe(width >= 960)
     await page.getByLabel('Language / 语言').selectOption('zh-CN')
+    if (width === 1440) await page.screenshot({ path: 'docs/screenshots/control-wide.png', fullPage: true })
   }
   await page.goto('/?demo=1&settings=1')
   await expect(page.getByRole('button', { name: '切换到 MacBook Pro', exact: true })).toBeVisible()
