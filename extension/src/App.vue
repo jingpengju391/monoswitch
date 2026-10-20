@@ -36,7 +36,6 @@ import { createInstallerDownload } from './installer-download'
 import { REPAIR_KEY, readRepairProgress } from './system-setup'
 
 const popupMode = new URLSearchParams(location.search).get('popup') === '1'
-const detachedMode = new URLSearchParams(location.search).get('window') === '1'
 const status = ref<HostStatus | null>(null)
 const sharingIdentity = ref<SharingIdentity | null>(null)
 const sharingRunning = ref(false)
@@ -326,11 +325,9 @@ async function openSmallWindow(): Promise<void> {
     if (isExtension) {
       await settingsSync.flush()
       const current = await chrome.tabs.getCurrent()
-      await chrome.windows.create({
-        url: chrome.runtime.getURL('index.html?popup=1&window=1'), type: 'popup',
-        width: Math.min(980, screen.availWidth), height: Math.min(760, screen.availHeight),
-      })
-      if (current?.id !== undefined) await chrome.tabs.remove(current.id)
+      if (current?.id === undefined) throw new Error('No source tab')
+      const result = await chrome.runtime.sendMessage({ type: 'open-toolbar-popup', tabId: current.id })
+      if (!result?.ok) throw new Error('Could not open toolbar popup')
     } else {
       const url = new URL(location.href)
       url.searchParams.set('popup', '1')
@@ -418,7 +415,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div :class="['app', 'unified-page', { onboarding: showSetup, 'popup-page': popupMode, 'detached-page': detachedMode }]">
+  <div :class="['app', 'unified-page', { onboarding: showSetup, 'popup-page': popupMode }]">
     <div v-if="demoMode" class="demo-banner"><span class="demo-dot"></span>{{ t('演示模式 · 不会控制真实显示器') }}</div>
     <header class="app-header">
       <div class="brand"><span class="brand-mark"><Icon name="monitor" :size="23" /></span><span>MonoSwitch<span class="brand-period">.</span></span></div>

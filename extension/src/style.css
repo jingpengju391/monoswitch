@@ -681,7 +681,7 @@ small {
 /* Chrome caps toolbar popups at 600px tall; scroll instead of clipping setup. */
 /* A toolbar popup is measured before it has a stable viewport. Using vw here
    traps Chrome at its initial narrow width instead of requesting 780px. */
-html:has(.popup-page:not(.detached-page)) { width: 780px; min-width: 780px; max-width: none; max-height: 600px; overflow-y: auto; }
+html:has(.popup-page) { width: 780px; min-width: 780px; max-width: none; max-height: 600px; overflow-y: auto; }
 .unified-page.popup-page { width: 780px; max-width: 100%; min-height: 0; padding: 18px 20px 0; }
 .popup-page .app-header { gap: 12px; margin-bottom: 18px; }
 .popup-page .panel, .popup-page .control-summary { padding: 18px; }
@@ -691,8 +691,6 @@ html:has(.popup-page:not(.detached-page)) { width: 780px; min-width: 780px; max-
 .unified-page .app-header { flex-wrap: wrap; }
 .view-toggle { flex-shrink: 0; }
 
-html:has(.detached-page) { width: auto; max-height: none; }
-.unified-page.detached-page { width: 100%; }
 @media (min-width: 740px) {
   .popup-page .control-summary { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 22px; }
   .popup-page .computer-pair { margin-bottom: 0; gap: 12px; }
@@ -700,7 +698,4 @@ html:has(.detached-page) { width: auto; max-height: none; }
   .popup-page .control-summary > .message { grid-column: 1 / -1; }
   .popup-page .settings-stack { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .popup-page .settings-stack > .message { grid-column: 1 / -1; }
-}
-@media (min-width: 960px) {
-  .detached-page .settings-stack { grid-template-columns: minmax(0, 1fr); }
 }

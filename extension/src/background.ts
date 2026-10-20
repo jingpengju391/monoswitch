@@ -20,6 +20,7 @@ import { REPAIR_KEY } from './system-setup'
 import { createSharingConnection } from './sharing-connection'
 import { validateProfile } from './profiles'
 import { syncNames } from './name-sync'
+import { openToolbarPopup } from './toolbar-popup'
 const sharing = createSharingConnection()
 
 const RESUME_KEY = 'monoswitch.sharingResume'
@@ -243,8 +244,15 @@ chrome.runtime.onMessage.addListener(
       return false
     const data = message as {
       type?: string
+      tabId?: number
       request?: NativeRequest
       confirmed?: boolean
+    }
+    if (data.type === 'open-toolbar-popup') {
+      if (!Number.isInteger(data.tabId)) return false
+      void openToolbarPopup(data.tabId!).then(() => sendResponse({ ok: true }))
+        .catch(() => sendResponse({ ok: false }))
+      return true
     }
     if (data.type === 'system-setup-state') {
       sendResponse({ running: repairing })

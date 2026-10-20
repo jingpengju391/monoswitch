@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path'
 import { extensionId } from '../scripts/host-config.mjs'
 
 // An ordinary page viewport cannot reproduce Chrome's popup auto-sizing.
-test('real toolbar popup requests its width and detached mode closes the source tab', async () => {
+test('real toolbar popup keeps its width and remains open after closing the source tab', async () => {
   const tools = process.env.MONOSWITCH_INPUT_TEST_TOOLS
   test.skip(process.platform !== 'linux' || !tools || !existsSync(join(tools, 'usr/bin/Xvfb')), 'Requires isolated Xvfb under MONOSWITCH_INPUT_TEST_TOOLS')
   const profile = await mkdtemp(join(tmpdir(), 'monoswitch-popup-'))
@@ -34,7 +34,7 @@ test('real toolbar popup requests its width and detached mode closes the source 
     const page = await context.newPage()
     await page.goto(`chrome-extension://${id}/index.html`)
     await page.bringToFront()
-    const cdp = await context.newCDPSession(page)
+    const cdp = await context.browser().newBrowserCDPSession()
     await page.evaluate(() => chrome.action.openPopup())
     let target
     await expect.poll(async () => {
@@ -42,7 +42,7 @@ test('real toolbar popup requests its width and detached mode closes the source 
       return Boolean(target)
     }).toBe(true)
     // Toolbar views appear as CDP targets, not normal Playwright pages.
-    const { sessionId } = await cdp.send('Target.attachToTarget', { targetId: target.targetId, flatten: false })
+    let { sessionId } = await cdp.send('Target.attachToTarget', { targetId: target.targetId, flatten: false })
     let serial = 0
     async function rpc(method, params = {}) {
       const id = ++serial
@@ -75,13 +75,30 @@ test('real toolbar popup requests its width and detached mode closes the source 
     await mkdir('docs/screenshots', { recursive: true })
     await writeFile('docs/screenshots/toolbar-popup.png', Buffer.from((await rpc('Page.captureScreenshot')).data, 'base64'))
     await cdp.send('Target.closeTarget', { targetId: target.targetId })
-    const smallPagePromise = context.waitForEvent('page')
+    // Use the actual page button, not a mocked windows API. Closing an inactive
+    // source tab must leave the toolbar view attached to the same browser window.
+    const before = await page.evaluate(async () => (await chrome.windows.getAll()).length)
     await page.getByRole('button', { name: '打开小窗口', exact: true }).click()
-    const smallPage = await smallPagePromise
-    await expect(smallPage).toHaveURL(/popup=1&window=1/)
     await expect.poll(() => page.isClosed()).toBe(true)
-    await expect(smallPage.locator('.detached-page')).toBeVisible()
-    expect(await smallPage.evaluate(() => innerWidth)).toBeGreaterThanOrEqual(900)
+    await expect.poll(async () => {
+      target = (await cdp.send('Target.getTargets')).targetInfos.find(t => t.url.endsWith('index.html?popup=1'))
+      return Boolean(target)
+    }).toBe(true)
+    ;({ sessionId } = await cdp.send('Target.attachToTarget', { targetId: target.targetId, flatten: false }))
+    const countWindows = await rpc('Runtime.evaluate', { expression: '(async () => (await chrome.windows.getAll()).length)()', awaitPromise: true, returnByValue: true })
+    expect(countWindows.result.value).toBe(before)
+    expect(context.pages().some(p => p.url().includes('window=1'))).toBe(false)
+    const width = await rpc('Runtime.evaluate', { expression: 'innerWidth', returnByValue: true })
+    expect(width.result.value).toBeGreaterThanOrEqual(780)
+    // Also cover a browser window whose only tab is the full extension page.
+    await cdp.send('Target.closeTarget', { targetId: target.targetId })
+    const onlyPage = await context.newPage()
+    await onlyPage.goto(`chrome-extension://${id}/index.html`)
+    for (const other of context.pages()) if (other !== onlyPage) await other.close()
+    await onlyPage.getByRole('button', { name: '打开小窗口', exact: true }).click()
+    await expect.poll(() => onlyPage.isClosed()).toBe(true)
+    await expect.poll(async () => (await cdp.send('Target.getTargets')).targetInfos.some(t => t.url.endsWith('index.html?popup=1'))).toBe(true)
+    expect((await cdp.send('Target.getTargets')).targetInfos.some(t => t.type === 'page' && t.url === 'chrome://newtab/')).toBe(true)
   } finally {
     await context?.close()
     xvfb.kill()
