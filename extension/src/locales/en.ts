@@ -1,4 +1,16 @@
 export const english: Record<string, string> = {
+  "连接管理": "Connection settings",
+  "连接详情": "Connection details",
+  "返回": "Back",
+  "待连接": "Not paired",
+  "首次配对后，自动连接": "Connects automatically after pairing",
+  "画面、鼠标和键盘一起切换": "Display, keyboard and mouse switch together",
+  "在下方完成一次配对，即可切换。": "Pair once below to start switching.",
+  "先选择这台电脑连接的显示器接口。": "Select this computer\u2019s display input first.",
+  "显示器与接口": "Display and input",
+  "选择本机接口": "Select this computer\u2019s input",
+  "更多选项": "More options",
+
   "已复制配对码": "Pairing code copied",
   "配对已在另一窗口更新，请重新检测。": "Pairing changed in another window. Check again.",
   "键鼠配对密钥损坏，请重新配对。": "The pairing key is damaged. Pair again.",

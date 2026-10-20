@@ -31,7 +31,7 @@
     "type": "module"
   },
   "options_ui": {
-    "page": "index.html?settings=1",
+    "page": "index.html",
     "open_in_tab": true
   },
   "commands": {

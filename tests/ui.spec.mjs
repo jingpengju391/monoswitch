@@ -161,6 +161,8 @@ test('compact control panel, explicit demo and safe switch feedback', async ({ p
 test('pairing rejects malformed profiles and exports actual local platform', async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 1000 })
   await page.goto('/?settings=1&demo=1')
+  await page.getByText('更多选项', { exact: true }).click()
+  await page.getByText('仅切画面时，手动交换配置', { exact: true }).click()
   const exported = await page.getByRole('textbox', { name: '本机导出配置' }).inputValue()
   expect(exported).toMatch(/^MS1\./)
   const own = JSON.parse(Buffer.from(exported.slice(4), 'base64').toString('utf8'))
@@ -280,8 +282,8 @@ for (const clipboardFails of [false, true]) {
       await expect(page.getByRole('status').filter({ hasText: '已复制，请在终端粘贴并回车' })).toBeVisible()
       expect(await page.evaluate(() => window.__monoswitchDownloads.calls.clipboard)).toEqual([await command.textContent()])
     }
-    // Copying is not executing: stay on step 2 until the host really responds.
-    await expect(page.getByRole('list', { name: '安装进度' }).locator('[aria-current="step"]')).toHaveText(/运行安装/)
+    // Copying is not executing: keep waiting until the host really responds.
+    await expect(page.getByRole('status').filter({ hasText: '正在等待组件连接' })).toBeVisible()
     await expect(page.getByText('系统信息由本地服务自动识别')).toHaveCount(0)
     await page.getByRole('button', { name: '在文件夹中显示', exact: true }).click()
     expect(await page.evaluate(() => window.__monoswitchDownloads.calls.show)).toEqual([1])
@@ -343,6 +345,8 @@ test('packaged extension connects to real Rust native host in isolated Chrome pr
     const secondPage = await context.newPage()
     await secondPage.goto(`chrome-extension://${id}/index.html?settings=1`)
     await expect(secondPage.getByText('系统信息由本地服务自动识别')).toBeVisible()
+    await page.getByText('更多选项', { exact: true }).click()
+    await secondPage.getByText('更多选项', { exact: true }).click()
     await page.getByLabel('电脑名称', { exact: true }).fill('桌面 A')
     await expect(secondPage.getByLabel('电脑名称', { exact: true })).toHaveValue('桌面 A')
     await secondPage.getByLabel('电脑名称', { exact: true }).fill('桌面 B')
@@ -448,19 +452,19 @@ test.describe('English and Chinese interface', () => {
   test('follows browser language, persists selection, and synchronizes pages', async ({ page, context }) => {
     await page.goto('/?demo=1&settings=1')
     await expect(page.locator('html')).toHaveAttribute('lang', 'en')
-    await expect(page.getByRole('heading', { name: 'Set up this computer', exact: true })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Copy profile', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Switch to MacBook Pro', exact: true })).toBeVisible()
+    await page.getByText('More options', { exact: true }).click()
     await page.getByLabel('Computer name', { exact: true }).fill('我的工作电脑')
     const other = await context.newPage()
     await other.goto('/?demo=1&settings=1')
     await page.getByLabel('Language / 语言', { exact: true }).selectOption('zh-CN')
-    await expect(page.getByRole('heading', { name: '设置这台电脑', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: '切换到 MacBook Pro', exact: true })).toBeVisible()
     await expect(other.locator('html')).toHaveAttribute('lang', 'zh-CN')
     await expect(page.getByLabel('电脑名称', { exact: true })).toHaveValue('我的工作电脑')
     await page.reload()
     await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN')
     await page.getByLabel('Language / 语言', { exact: true }).selectOption('en')
-    await expect(page.getByRole('heading', { name: 'Set up this computer', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Switch to MacBook Pro', exact: true })).toBeVisible()
     await page.screenshot({ path: 'docs/screenshots/settings-en.png', fullPage: true })
     await other.close()
   })
@@ -492,7 +496,7 @@ test('keyboard sharing pairs once with a code and explains when switching is rea
           const request = message.request
           if (!request) return { ok: true, data: {} }
           calls.push(JSON.parse(JSON.stringify(message)))
-          if (request.action === 'status') return { ok: true, data: { version: '0.1.0', platform: { os: 'linux', arch: 'x86_64', hostname: 'Manjaro' }, backend: { name: 'ddcutil', available: true }, warnings: [], displays: [{ id: 'test', name: 'Dell', currentInput: 15, canSwitch: true, inputDetection: 'reported', inputs: [{ value: 15, label: 'DP' }, { value: 17, label: 'HDMI' }] }] } }
+          if (request.action === 'status') return { ok: true, data: { version: '0.1.0', platform: { os: 'linux', arch: 'x86_64', hostname: 'Manjaro' }, backend: { name: 'ddcutil', available: true }, systemSetup: { needsRepair: false, canRepair: true, issues: [] }, warnings: [], displays: [{ id: 'test', name: 'Dell', currentInput: 15, canSwitch: true, inputDetection: 'reported', inputs: [{ value: 15, label: 'DP' }, { value: 17, label: 'HDMI' }] }] } }
           if (request.action === 'sharingPairHost') Object.assign(sharing, { identity, pairingCode: 'MS2.test-invitation' })
           if (request.action === 'sharingPairJoin') Object.assign(sharing, { running: true, connected: true, active: true, pairingCode: null })
           if (request.action === 'sharingStop') Object.assign(sharing, { running: false, connected: false, pairingCode: null })
@@ -515,6 +519,10 @@ test('keyboard sharing pairs once with a code and explains when switching is rea
   const calls = await page.evaluate(() => window.__sharingCalls)
   expect(calls.find(call => call.request.action === 'sharingPairJoin')).toMatchObject({ confirmed: true, request: { code: 'MS2.peer-code' } })
   await page.screenshot({ path: 'docs/screenshots/sharing-connected.png', fullPage: true })
+  await expect(page.locator('.local-settings')).not.toHaveAttribute('open')
+  await expect(page.locator('.advanced-options')).not.toHaveAttribute('open')
+  await expect(page.getByRole('button', { name: '停止键鼠共享', exact: true })).not.toBeVisible()
+  await page.getByText('连接管理', { exact: true }).click()
   await page.getByRole('button', { name: '停止键鼠共享', exact: true }).click()
   await expect(page.getByRole('button', { name: '生成配对码', exact: true })).toBeVisible()
   await page.screenshot({ path: 'docs/screenshots/sharing-settings.png', fullPage: true })
@@ -533,6 +541,7 @@ test('installed users can reopen downloads without old host dismissing the page'
     } })
   })
   await page.goto('/?settings=1')
+  await page.getByText('更多选项', { exact: true }).click()
   await page.getByRole('button', { name: '重新下载组件', exact: true }).click()
   await page.getByRole('button', { name: '下载组件', exact: true }).click()
   await page.evaluate(() => window.__monoswitchDownloads.change('complete'))
@@ -541,6 +550,25 @@ test('installed users can reopen downloads without old host dismissing the page'
   await expect(page.getByRole('button', { name: '复制安装命令', exact: true })).toBeVisible()
   await page.getByRole('button', { name: '重新下载', exact: true }).click()
   expect(await page.evaluate(() => window.__monoswitchDownloads.calls.download.length)).toBe(2)
-  await page.getByRole('button', { name: '返回设置', exact: true }).click()
+  await page.getByRole('button', { name: '返回', exact: true }).click()
+  await page.getByText('更多选项', { exact: true }).click()
   await expect(page.getByRole('button', { name: '重新下载组件', exact: true })).toBeVisible()
+})
+
+test('one page keeps daily controls visible and secondary setup collapsed at narrow widths', async ({ page }) => {
+  for (const width of [320, 440, 680]) {
+    await page.setViewportSize({ width, height: 800 })
+    await page.goto('/?demo=1')
+    await expect(page.getByRole('button', { name: '切换到 MacBook Pro', exact: true })).toBeVisible()
+    await expect(page.locator('.local-settings')).not.toHaveAttribute('open')
+    await expect(page.locator('.advanced-options')).not.toHaveAttribute('open')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.getByLabel('Language / 语言').selectOption('en')
+    await expect(page.getByRole('button', { name: 'Switch to MacBook Pro', exact: true })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.getByLabel('Language / 语言').selectOption('zh-CN')
+  }
+  await page.goto('/?demo=1&settings=1')
+  await expect(page.getByRole('button', { name: '切换到 MacBook Pro', exact: true })).toBeVisible()
+  await expect(page.locator('.advanced-options')).not.toHaveAttribute('open')
 })

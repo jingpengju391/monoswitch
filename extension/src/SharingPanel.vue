@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
-import type { ComputerProfile, HostStatus, Settings, SharingIdentity, SharingStatus } from '../../shared/protocol'
+import type { ComputerProfile, HostStatus, SharingIdentity, SharingStatus } from '../../shared/protocol'
 import { demoMode, request } from './bridge'
 import { t, diagnostic } from './i18n'
 import Icon from './Icon.vue'
 
-const props = defineProps<{ host: HostStatus; settings: Settings; profile: ComputerProfile | null; compact?: boolean }>()
+const props = defineProps<{ host: HostStatus; profile: ComputerProfile | null }>()
 const emit = defineEmits<{ identity: [SharingIdentity | null]; upgrade: []; running: [boolean] }>()
 const state = ref<SharingStatus | null>(null)
 const pending = ref(false)
@@ -63,7 +63,7 @@ onUnmounted(() => { disposed = true; clearTimeout(timer) })
 </script>
 
 <template>
-  <section class="panel sharing-panel" :class="{ 'sharing-compact': compact }" :aria-label="t('键盘与鼠标共享')">
+  <section class="panel sharing-panel" :class="{ 'sharing-connected': state?.connected }" :aria-label="t('键盘与鼠标共享')">
     <div class="panel-heading">
       <Icon name="link" :size="22" />
       <div><h2>{{ t('键盘与鼠标共享') }}</h2><p>{{ t('点击切换电脑，画面和键鼠一起过去') }}</p></div>
@@ -76,14 +76,13 @@ onUnmounted(() => { disposed = true; clearTimeout(timer) })
     </template>
     <template v-else-if="state">
       <template v-if="state.running">
-        <p v-if="state.connected">{{ t('现在点击主界面的“切换到另一台电脑”，鼠标和键盘会同时切换，无需额外快捷键。') }}</p>
-        <template v-else>
+        <template v-if="!state.connected">
           <p>{{ t('尚未建立键鼠连接。请保持两台 Chrome 运行；若此前手动配置未连通，停止后使用下面的一次性配对。') }}</p>
           <p>{{ t(state.role === 'server' ? '本机是发送端，正在等待接收端连接。' : '本机是接收端，正在连接发送端。') }}</p>
         </template>
-        <button class="secondary-button" :disabled="pending" @click="run('sharingStop')">{{ t('停止键鼠共享') }}</button>
+        <details class="sharing-management" :open="!state.connected"><summary>{{ t('连接管理') }}</summary><p class="privacy-note">{{ t('配对后随 Chrome 启动自动连接；主动停止会关闭自动连接。发送端不能休眠。') }}</p><button class="secondary-button" :disabled="pending" @click="run('sharingStop')">{{ t('停止键鼠共享') }}</button></details>
       </template>
-      <template v-else-if="!compact">
+      <template v-else>
         <div v-if="!state.installed" class="message warning sharing-install">
           <p>{{ t('需要 Deskflow 1.26 或更新版本作为键鼠组件。') }}</p>
           <button v-if="host.platform.os === 'linux'" class="secondary-button" :disabled="pending" @click="run('sharingInstall')">{{ t(pending ? '等待系统授权或安装完成…' : '安装键鼠组件') }}</button>
@@ -116,8 +115,6 @@ onUnmounted(() => { disposed = true; clearTimeout(timer) })
           <p class="privacy-note">{{ t('键鼠直接插在电脑上时，在接着键鼠的电脑生成配对码。') }}</p>
         </template>
       </template>
-      <p v-else>{{ t('请在设置页面完成一次配对，之后直接切换电脑。') }}</p>
-      <p class="privacy-note">{{ t('配对后随 Chrome 启动自动连接；主动停止会关闭自动连接。发送端不能休眠。') }}</p>
       <p v-if="state.lastError" class="message danger">{{ diagnostic(state.lastError) }}</p>
       <p v-if="state.displayMessage" class="message warning">{{ diagnostic(state.displayMessage) }}</p>
     </template>
