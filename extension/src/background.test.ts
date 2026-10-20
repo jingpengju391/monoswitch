@@ -13,6 +13,7 @@ let onMessage: (
 ) => boolean
 let onCommand: (command: string) => void
 let onAction: () => void
+let onSettingsChanged: (changes: Record<string, chrome.storage.StorageChange>, area: string) => void
 let nativeCalls: NativeRequest[]
 let saved: Record<string, unknown>
 let delaySwitch: ((response: unknown) => void) | null
@@ -64,6 +65,7 @@ beforeEach(async () => {
       openOptionsPage: vi.fn(),
     },
     storage: {
+      onChanged: { addListener: (listener: typeof onSettingsChanged) => { onSettingsChanged = listener } },
       local: {
         get: vi.fn(async () => ({ [SETTINGS_KEY]: state.settings })),
         remove: vi.fn(async (key: string) => { delete saved[key] }),
@@ -237,4 +239,29 @@ it('opens the full page from the toolbar instead of a popup', () => {
   expect(manifest.options_ui).toEqual({ page: 'index.html', open_in_tab: true })
   onAction()
   expect(chrome.runtime.openOptionsPage).toHaveBeenCalledOnce()
+})
+
+
+it('publishes a rename from storage while preserving the established sharing session', async () => {
+  const identity = { id: 'ms-' + 'a'.repeat(16), fingerprint: 'a'.repeat(64) }
+  state.settings.peer!.sharing = identity
+  const config = { role: 'server' as const, peer: identity, address: '', port: 24800,
+    followDisplay: true, displayId: 'monitor-1', input: 15 }
+  const start = send({ action: 'sharingStart', config }, true)
+  await vi.waitFor(() => expect(nativeCalls.at(-1)?.action).toBe('sharingStart'))
+  repairReply({ ok: true, data: { running: true } })
+  await start
+  const old = structuredClone(state.settings)
+  state.settings.localName = 'Renamed'
+  onSettingsChanged({ [SETTINGS_KEY]: { oldValue: old, newValue: state.settings } }, 'local')
+  await vi.waitFor(() => expect(nativeCalls.at(-1)?.action).toBe('sharingStatus'))
+  repairReply({ ok: true, data: { nameSync: true, running: true, peerIdentity: identity,
+    localName: old.localName, peerName: 'Remote renamed' } })
+  await vi.waitFor(() => expect(nativeCalls.at(-1)).toEqual({ action: 'sharingSetName', name: 'Renamed' }))
+  repairReply({ ok: true, data: {} })
+  await vi.waitFor(() => expect(saved[SETTINGS_KEY]).toMatchObject({
+    localName: 'Renamed', peer: { name: 'Remote renamed', sharing: identity },
+  }))
+  expect(nativeCalls.filter(call => call.action === 'sharingStart')).toHaveLength(1)
+  expect(nativeCalls.some(call => call.action === 'switch' || call.action === 'sharingStop')).toBe(false)
 })

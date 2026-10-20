@@ -19,6 +19,7 @@ import {
 import { REPAIR_KEY } from './system-setup'
 import { createSharingConnection } from './sharing-connection'
 import { validateProfile } from './profiles'
+import { syncNames } from './name-sync'
 const sharing = createSharingConnection()
 
 const RESUME_KEY = 'monoswitch.sharingResume'
@@ -34,7 +35,10 @@ async function startPaired(paired: PairedComputer, role: 'server' | 'client'): P
     followDisplay: true, displayId: settings.displayId, input: settings.localInput }
   await chrome.storage.local.set({ [SETTINGS_KEY]: { ...settings, peer } })
   const result = await sharing.request({ action: 'sharingStart', config })
-  if (result.ok) await chrome.storage.local.set({ [RESUME_KEY]: config })
+  if (result.ok) {
+    await chrome.storage.local.set({ [RESUME_KEY]: config })
+    await syncNames(result, sharing.request)
+  }
   return result
 }
 async function awaitPair(generation: number, deadline: number) {
@@ -74,10 +78,18 @@ async function resumeSharing() {
     const result = await sharing.request({ action: 'sharingStart', config: { ...config,
       displayId: settings.displayId, input: settings.localInput ?? 0 } })
     if (!result.ok) { sharingError = result.error.message; await operation('failed', sharingError) }
+    else await syncNames(result, sharing.request)
   } catch { /* A later explicit pairing can replace invalid saved configuration. */ }
 }
 const resumed = resumeSharing()
 chrome.runtime.onStartup?.addListener(() => { void resumed.then(resumeSharing) })
+chrome.storage.onChanged?.addListener((changes, area) => {
+  const changed = changes[SETTINGS_KEY]
+  if (area !== 'local' || !changed || readSettings(changed.oldValue).localName === readSettings(changed.newValue).localName) return
+  void resumed.then(async () => {
+    if (sharing.connected()) await syncNames(await sharing.request({ action: 'sharingStatus' }), sharing.request)
+  }).catch(() => {})
+})
 
 let busy = false
 let repairing = false
@@ -242,10 +254,11 @@ chrome.runtime.onMessage.addListener(
     if ((data.request.action === 'sharingPairHost' || data.request.action === 'sharingPairJoin') && data.confirmed === true) {
       void pair(data.request).then(sendResponse).catch(() => sendResponse(failure('PAIRING_FAILED', '自动配对未完成，请重新生成配对码。')))
     } else if (data.request.action === 'sharingStatus') {
-      void resumed.then(() => sharing.connected() ? sharing.request(data.request!) : native(data.request!)).then(result => {
+      void resumed.then(() => sharing.connected() ? sharing.request(data.request!) : native(data.request!)).then(async result => {
+        await syncNames(result, sharing.request)
         if (result.ok && sharingError) sendResponse({ ...result, data: { ...(result.data as SharingStatus), lastError: sharingError } })
         else sendResponse(result)
-      })
+      }).catch(() => sendResponse(failure('SHARING_DISCONNECTED', '无法读取键鼠共享状态，请重试。')))
     } else if (data.request.action === 'sharingIdentity' && data.confirmed === true) {
       void native(data.request).then(sendResponse)
     } else if (data.request.action === 'sharingInstall' && data.confirmed === true) {

@@ -41,7 +41,7 @@ pub fn status() -> Result<HostStatus, crate::model::AppError> {
     })
 }
 
-fn info() -> PlatformInfo {
+pub(crate) fn info() -> PlatformInfo {
     let hostname = std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
         .ok()

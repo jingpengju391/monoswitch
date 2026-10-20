@@ -50,6 +50,7 @@ fn handle_session(bytes: &[u8], sharing: &mut sharing::Session) -> Value {
                 sharing.switch_peer()?;
                 Ok(json!({ "accepted": true, "message": "键鼠已切换。" }))
             }
+            Request::SharingSetName { name } => Ok(json!(sharing.set_name(&name)?)),
             Request::SharingStatus {} => Ok(json!(sharing.status()?)),
             Request::SharingIdentity {} => Ok(json!(sharing::identity()?)),
             Request::SharingStart { config } => Ok(json!(sharing.start(config)?)),

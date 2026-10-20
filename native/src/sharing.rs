@@ -42,7 +42,7 @@ impl Identity {
             && self.id == format!("ms-{}", self.fingerprint[..16].to_ascii_lowercase())
     }
 }
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 struct Secret {
     certificate: String,
     key: String,
@@ -107,6 +107,12 @@ impl Config {
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
+    pub name_sync: bool,
+    pub local_name: Option<String>,
+    pub peer_name: Option<String>,
+    pub peer_identity: Option<Identity>,
+    #[serde(skip)]
+    own_name: Option<String>,
     pub pairing_code: Option<String>,
     pub paired: Option<pairing::Paired>,
     pub installed: bool,
@@ -354,6 +360,30 @@ impl Session {
         pairing::join(code, profile)
     }
 
+    pub fn set_name(&mut self, name: &str) -> Result<Status, AppError> {
+        let name = name.trim();
+        if name.chars().count() > 60 || name.chars().any(char::is_control) {
+            return Err(failure("电脑名称无效。"));
+        }
+        let resolved = if name.is_empty() {
+            crate::platform::info()
+                .hostname
+                .chars()
+                .filter(|c| !c.is_control())
+                .take(60)
+                .collect()
+        } else {
+            name.to_owned()
+        };
+        control::validate_name(&Some(resolved.clone()))?;
+        {
+            let mut state = self.state.lock().unwrap();
+            state.local_name = Some(name.to_owned());
+            state.own_name = Some(resolved);
+        }
+        self.status()
+    }
+
     pub fn switch_peer(&mut self) -> Result<(), AppError> {
         let state = self.status()?;
         if !state.running || !state.connected {
@@ -386,6 +416,7 @@ impl Session {
                 state.last_error = Some("配对码已过期，请重新生成。".into());
             }
         }
+        state.name_sync = true;
         state.installed = backend().is_some();
         state.identity = load_secret(&root()?)?.map(|s| s.identity());
         Ok(state)
@@ -438,6 +469,7 @@ impl Session {
             active: config.role == Role::Server,
             role: Some(config.role),
             identity: Some(own.identity()),
+            peer_identity: Some(config.peer.clone()),
             ..Status::default()
         };
         if let Some(stdout) = child.stdout.take() {
@@ -467,6 +499,14 @@ impl Session {
                 }
             }
         }
+        if config.role == Role::Client {
+            self.threads.push(control::sync_names(
+                own,
+                config,
+                self.alive.clone(),
+                self.state.clone(),
+            ));
+        }
         self.status()
     }
     pub fn stop(&mut self) {
@@ -485,6 +525,8 @@ impl Session {
         state.running = false;
         state.connected = false;
         state.active = false;
+        state.peer_name = None;
+        state.peer_identity = None;
     }
 }
 impl Drop for Session {

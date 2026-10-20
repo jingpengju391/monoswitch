@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 pub enum Request {
     Status {},
     SharingStatus {},
+    SharingSetName {
+        name: String,
+    },
     SharingInstall {},
     SharingIdentity {},
     SharingStart {

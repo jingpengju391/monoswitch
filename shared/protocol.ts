@@ -42,6 +42,7 @@ export interface SwitchResult {
 export type NativeRequest =
   | { action: 'status' }
   | { action: 'sharingStatus' }
+  | { action: 'sharingSetName'; name: string }
   | { action: 'sharingIdentity' }
   | { action: 'sharingInstall' }
   | { action: 'sharingStart'; config: SharingConfig }
@@ -85,6 +86,10 @@ export interface SharingConfig {
 }
 export interface PairedComputer { peer: ComputerProfile; address: string; port: number }
 export interface SharingStatus {
+  nameSync?: boolean
+  localName?: string | null
+  peerName?: string | null
+  peerIdentity?: SharingIdentity | null
   pairingCode?: string | null
   paired?: PairedComputer | null
   installed: boolean

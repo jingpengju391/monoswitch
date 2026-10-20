@@ -1,4 +1,4 @@
-//! Small mutually authenticated TLS channel; only permits selecting sender/receiver.
+//! Small mutually authenticated TLS channel; permits focus selection and bounded display-name exchange.
 use super::*;
 use rustls::{
     DigitallySignedStruct, SignatureScheme,
@@ -134,8 +134,20 @@ pub(super) fn listen(
                         let mut stream = rustls::StreamOwned::new(connection, stream);
                         let mut command = [0];
                         stream.read_exact(&mut command).map_err(io_error)?;
-                        if !alive.load(Ordering::Acquire) || command[0] > 1 {
+                        if !alive.load(Ordering::Acquire) || command[0] > 2 {
                             return Err(failure("无效的联动请求。"));
+                        }
+                        if command[0] == 2 {
+                            let name = read_name(&mut stream)?;
+                            let own = {
+                                let mut state = state.lock().unwrap();
+                                if !state.running {
+                                    return Err(failure("键鼠共享未运行。"));
+                                }
+                                state.peer_name = name;
+                                state.own_name.clone()
+                            };
+                            return write_name(&mut stream, &own);
                         }
                         let result = focus(&state, command[0] == 1);
                         let reply = match result {
@@ -191,6 +203,28 @@ pub(super) fn switch(
     if config.role == Role::Server {
         return focus(state, true);
     }
+    let mut stream = connect(secret, config)?;
+    stream.write_all(&[0]).map_err(io_error)?;
+    stream.flush().map_err(io_error)?;
+    let mut reply = String::new();
+    BufReader::new(stream.take(1024))
+        .read_line(&mut reply)
+        .map_err(io_error)?;
+    if reply.trim() == "OK" {
+        Ok(())
+    } else {
+        Err(failure(if reply.is_empty() {
+            "发送端未确认键鼠切换。"
+        } else {
+            reply.trim()
+        }))
+    }
+}
+
+fn connect(
+    secret: &Secret,
+    config: &Config,
+) -> Result<rustls::StreamOwned<rustls::ClientConnection, TcpStream>, AppError> {
     let address: IpAddr = config.address.parse().map_err(io_error)?;
     let tcp = TcpStream::connect_timeout(
         &SocketAddr::new(address, config.port + 1),
@@ -212,20 +246,168 @@ pub(super) fn switch(
         ServerName::try_from("monoswitch.local").unwrap(),
     )
     .map_err(io_error)?;
-    let mut stream = rustls::StreamOwned::new(connection, tcp);
-    stream.write_all(&[0]).map_err(io_error)?;
-    stream.flush().map_err(io_error)?;
-    let mut reply = String::new();
-    BufReader::new(stream.take(1024))
-        .read_line(&mut reply)
+    Ok(rustls::StreamOwned::new(connection, tcp))
+}
+
+pub(super) fn validate_name(name: &Option<String>) -> Result<(), AppError> {
+    if let Some(name) = name
+        && (name.trim().is_empty()
+            || name.chars().count() > 60
+            || name.chars().any(char::is_control))
+    {
+        return Err(failure("电脑名称无效。"));
+    }
+    Ok(())
+}
+fn read_name(stream: &mut impl Read) -> Result<Option<String>, AppError> {
+    let mut bytes = Vec::new();
+    BufReader::new(stream.take(512))
+        .read_until(b'\n', &mut bytes)
         .map_err(io_error)?;
-    if reply.trim() == "OK" {
-        Ok(())
-    } else {
-        Err(failure(if reply.is_empty() {
-            "发送端未确认键鼠切换。"
-        } else {
-            reply.trim()
-        }))
+    if bytes.last() != Some(&b'\n') {
+        return Err(failure("电脑名称无效。"));
+    }
+    let name: Option<String> = serde_json::from_slice(&bytes).map_err(io_error)?;
+    validate_name(&name)?;
+    Ok(name)
+}
+fn write_name(stream: &mut impl Write, name: &Option<String>) -> Result<(), AppError> {
+    validate_name(name)?;
+    serde_json::to_writer(&mut *stream, name).map_err(io_error)?;
+    stream.write_all(b"\n").map_err(io_error)?;
+    stream.flush().map_err(io_error)
+}
+pub(super) fn sync_names(
+    secret: Secret,
+    config: Config,
+    alive: Arc<AtomicBool>,
+    state: Arc<Mutex<Status>>,
+) -> JoinHandle<()> {
+    thread::spawn(move || {
+        while alive.load(Ordering::Acquire) {
+            let name = state.lock().unwrap().own_name.clone();
+            // Wait for Chrome to supply the saved name, avoiding stale hostname updates.
+            if name.is_some() {
+                let result = exchange_name(&secret, &config, &name);
+                if let Ok(peer) = result
+                    && alive.load(Ordering::Acquire)
+                {
+                    state.lock().unwrap().peer_name = peer;
+                }
+            }
+            // Interruptible delay keeps stop/re-pair responsive.
+            for _ in 0..20 {
+                if !alive.load(Ordering::Acquire) {
+                    return;
+                }
+                thread::sleep(std::time::Duration::from_millis(100));
+            }
+        }
+    })
+}
+
+fn exchange_name(
+    secret: &Secret,
+    config: &Config,
+    name: &Option<String>,
+) -> Result<Option<String>, AppError> {
+    let mut stream = connect(secret, config)?;
+    stream.write_all(&[2]).map_err(io_error)?;
+    write_name(&mut stream, name)?;
+    read_name(&mut stream)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn secret() -> Secret {
+        let cert = rcgen::generate_simple_self_signed(vec!["monoswitch.local".into()]).unwrap();
+        Secret {
+            certificate: cert.cert.pem(),
+            key: cert.key_pair.serialize_pem(),
+            der: cert.cert.der().to_vec(),
+        }
+    }
+
+    #[test]
+    fn names_are_bounded_and_control_characters_rejected() {
+        for mut data in [
+            b"\"bad\\nname\"\n".as_slice(),
+            b"\"\n",
+            b"\"no terminator\"",
+        ] {
+            assert!(read_name(&mut data).is_err());
+        }
+        assert!(validate_name(&Some("x".repeat(61))).is_err());
+        assert!(validate_name(&Some(" ".into())).is_err());
+        assert!(validate_name(&Some("工作电脑".into())).is_ok());
+    }
+
+    #[test]
+    fn pinned_tls_exchanges_renames_without_changing_input_focus() {
+        let server = secret();
+        let client = secret();
+        let stranger = secret();
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port() - 1;
+        drop(listener);
+        let server_config = Config {
+            role: Role::Server,
+            peer: client.identity(),
+            address: String::new(),
+            port,
+            follow_display: false,
+            display_id: "test".into(),
+            input: 15,
+        };
+        let client_config = Config {
+            role: Role::Client,
+            peer: server.identity(),
+            address: "127.0.0.1".into(),
+            ..server_config.clone()
+        };
+        let alive = Arc::new(AtomicBool::new(true));
+        let state = Arc::new(Mutex::new(Status {
+            running: true,
+            active: true,
+            own_name: Some("主机".into()),
+            ..Status::default()
+        }));
+        let worker = listen(&server, &server_config, alive.clone(), state.clone()).unwrap();
+        let result = exchange_name(&client, &client_config, &Some("副机".into())).unwrap();
+        assert_eq!(result.as_deref(), Some("主机"));
+        assert_eq!(state.lock().unwrap().peer_name.as_deref(), Some("副机"));
+        assert!(exchange_name(&stranger, &client_config, &Some("伪造".into())).is_err());
+        assert_eq!(state.lock().unwrap().peer_name.as_deref(), Some("副机"));
+        state.lock().unwrap().own_name = Some("新的主机".into());
+        assert_eq!(
+            exchange_name(&client, &client_config, &Some("新的副机".into()))
+                .unwrap()
+                .as_deref(),
+            Some("新的主机")
+        );
+        assert_eq!(state.lock().unwrap().peer_name.as_deref(), Some("新的副机"));
+        assert!(state.lock().unwrap().active);
+        let client_state = Arc::new(Mutex::new(Status {
+            own_name: Some("自动同步副机".into()),
+            ..Status::default()
+        }));
+        let sync = sync_names(client, client_config, alive.clone(), client_state.clone());
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while Instant::now() < deadline && client_state.lock().unwrap().peer_name.is_none() {
+            thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(
+            client_state.lock().unwrap().peer_name.as_deref(),
+            Some("新的主机")
+        );
+        assert_eq!(
+            state.lock().unwrap().peer_name.as_deref(),
+            Some("自动同步副机")
+        );
+        alive.store(false, Ordering::Release);
+        sync.join().unwrap();
+        worker.join().unwrap();
     }
 }
