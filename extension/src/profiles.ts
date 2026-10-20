@@ -1,4 +1,4 @@
-import type { ComputerProfile, PlatformInfo } from '../../shared/protocol'
+import type { ComputerProfile, PlatformInfo, SharingIdentity } from '../../shared/protocol'
 
 const MAX_LENGTH = 8192
 const PREFIX = 'MS1.'
@@ -47,6 +47,7 @@ export function validateProfile(value: unknown): ComputerProfile {
     monitor.serial = field(rawMonitor.serial, '显示器序列号', 128)
   return {
     version: 1,
+    ...(data.sharing === undefined ? {} : { sharing: validateSharingIdentity(data.sharing) }),
     name: field(data.name, '电脑名称', 60),
     platform,
     input: Number(data.input),
@@ -93,4 +94,13 @@ export function platformLabel(platform: PlatformInfo): string {
   if (platform.os === 'windows') return 'Windows'
   if (platform.os === 'macos') return 'macOS'
   return platform.distribution || 'Linux'
+}
+
+export function validateSharingIdentity(value: unknown): SharingIdentity {
+  const identity = object(value)
+  if (typeof identity.fingerprint !== 'string' || !/^[a-f0-9]{64}$/u.test(identity.fingerprint)
+    || identity.id !== `ms-${identity.fingerprint.slice(0, 16)}`) {
+    throw new Error('键鼠配对配置无效，请重新交换配置。')
+  }
+  return { id: identity.id as string, fingerprint: identity.fingerprint }
 }

@@ -41,3 +41,17 @@
 「指令已发送」不是画面已切换的确认。扩展不通过 HDMI/DP 推断远端系统，也不自动共享键盘鼠标。
 
 - 中英文界面：验证浏览器语言默认选择、手动切换、持久化、跨页面同步，且电脑名称保持原样；检查英文设置页与安装引导截图。
+
+## 键鼠共享验证（2026-10-20）
+
+- `npm test`：96 项扩展测试、25 项原生测试、10 项安装器测试及 20 项脚本测试通过。真实输入集成测试默认 ignored，需显式提供测试工具路径。
+- `npm run check`：Vue/TypeScript 构建和两个 Rust crate 的 Clippy 检查通过。
+- 新增浏览器测试覆盖配对身份写入导出码、未确认时禁止开启、确认后的启动参数、停止会话、中英文界面。
+- Linux X11 下使用两个隔离 Xvfb 桌面运行真实 Deskflow 1.26：验证错误指纹拒绝、双向 TLS 配对、接收端获得按键和鼠标移动、F8/F9 焦点切换及断线记录。不操作当前用户桌面或真实显示器。
+- Windows x64、macOS Intel/ARM、Linux x64 安装器可交叉构建。交叉构建不能代替对应操作系统的权限与输入注入真机测试；Wayland 也未做真机验证。
+
+真实输入测试命令（工具目录包含 `usr/bin/{Xvfb,deskflow-core,xdotool,xev}` 和对应 `usr/lib`）：
+
+```sh
+MONOSWITCH_INPUT_TEST_TOOLS=/path/to/tools cargo test --manifest-path native/Cargo.toml real_tls_pairing -- --ignored --nocapture
+```

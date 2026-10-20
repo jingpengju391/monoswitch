@@ -179,6 +179,41 @@ pub fn repair() -> Result<(), String> {
     Ok(())
 }
 
+/// Installs only the optional, explicitly requested input-sharing backend.
+#[allow(dead_code)]
+pub fn install_sharing() -> Result<(), String> {
+    let manager = package_manager(&fs::read_to_string("/etc/os-release").unwrap_or_default())
+        .ok_or("当前发行版无法自动安装 Deskflow，请使用官方下载。")?;
+    let auth = executable("pkexec").ok_or("找不到系统图形授权工具")?;
+    let output = Command::new(auth)
+        .args([
+            "/bin/sh",
+            "-c",
+            include_str!("linux-sharing-setup.sh"),
+            "monoswitch-input-setup",
+            manager,
+        ])
+        .env_clear()
+        .env("PATH", "/usr/sbin:/usr/bin:/sbin:/bin")
+        .env("LANG", "C.UTF-8")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| format!("无法安装键鼠组件：{e}"))?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "键鼠组件安装未完成，请检查授权或软件源。{}",
+            String::from_utf8_lossy(&output.stderr)
+                .chars()
+                .take(1500)
+                .collect::<String>()
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

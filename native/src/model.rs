@@ -4,6 +4,13 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Request {
     Status {},
+    SharingStatus {},
+    SharingInstall {},
+    SharingIdentity {},
+    SharingStart {
+        config: crate::sharing::Config,
+    },
+    SharingStop {},
     Repair {},
     Switch {
         #[serde(rename = "displayId")]

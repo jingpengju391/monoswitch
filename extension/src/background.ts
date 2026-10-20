@@ -14,11 +14,13 @@ import {
   type Operation,
 } from './state'
 import { REPAIR_KEY } from './system-setup'
+import { createSharingConnection } from './sharing-connection'
+const sharing = createSharingConnection()
 
 let busy = false
 let repairing = false
 
-function repairNative(): Promise<NativeResponse<HostStatus>> {
+function repairNative(action: 'repair' | 'sharingInstall' = 'repair'): Promise<NativeResponse<HostStatus>> {
   return new Promise(resolve => {
     // Keep the worker alive while the user authorizes and packages install.
     const port = chrome.runtime.connectNative(HOST_NAME)
@@ -35,7 +37,7 @@ function repairNative(): Promise<NativeResponse<HostStatus>> {
       finish(failure('SETUP_DISCONNECTED', error?.message || '配置连接已断开，请重新检测系统状态。'))
     })
     try {
-      port.postMessage({ action: 'repair' })
+      port.postMessage({ action })
     } catch {
       finish(failure('SETUP_DISCONNECTED', '无法向本地组件发送配置请求。'))
     }
@@ -162,7 +164,15 @@ chrome.runtime.onMessage.addListener(
       return false
     }
     if (data.type !== 'native' || !data.request) return false
-    if (data.request.action === 'status') {
+    if (data.request.action === 'sharingStatus') {
+      void (sharing.connected() ? sharing.request(data.request) : native(data.request)).then(sendResponse)
+    } else if (data.request.action === 'sharingIdentity' && data.confirmed === true) {
+      void native(data.request).then(sendResponse)
+    } else if (data.request.action === 'sharingInstall' && data.confirmed === true) {
+      void repairNative('sharingInstall').then(sendResponse).catch(() => sendResponse(failure('SETUP_FAILED', '无法启动自动配置，请重新加载扩展后重试。')))
+    } else if ((data.request.action === 'sharingStart' || data.request.action === 'sharingStop') && data.confirmed === true) {
+      void sharing.request(data.request).then(sendResponse)
+    } else if (data.request.action === 'status') {
       void native<HostStatus>({ action: 'status' }).then(sendResponse)
     } else if (data.request.action === 'repair' && data.confirmed === true) {
       void repairSystem().then(sendResponse)

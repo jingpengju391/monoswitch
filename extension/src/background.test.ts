@@ -184,3 +184,10 @@ describe('background switch orchestration', () => {
     expect(nativeCalls).toHaveLength(0)
   })
 })
+
+it('requires explicit confirmation before sharing installation, pairing or capture', async () => {
+  for (const action of ['sharingInstall', 'sharingIdentity', 'sharingStop'] as const) {
+    expect(await send({ action })).toMatchObject({ ok: false, error: { code: 'INVALID_REQUEST' } })
+  }
+  expect(nativeCalls).toHaveLength(0)
+})

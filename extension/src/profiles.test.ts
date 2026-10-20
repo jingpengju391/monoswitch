@@ -68,3 +68,10 @@ describe('portable computer profiles', () => {
     expect(() => decodeProfile('MS1.' + btoa('\xff'))).toThrow('损坏')
   })
 })
+
+ it('round-trips keyboard identities and rejects altered fingerprints', () => {
+  const sharing = { id: 'ms-' + 'a'.repeat(16), fingerprint: 'a'.repeat(64) }
+  expect(decodeProfile(encodeProfile({ ...profile, sharing })).sharing).toEqual(sharing)
+  expect(() => validateProfile({ ...profile, sharing: { ...sharing, fingerprint: 'b'.repeat(64) } })).toThrow()
+  expect(() => validateProfile({ ...profile, sharing: { ...sharing, id: 'bad\\nname' } })).toThrow()
+})

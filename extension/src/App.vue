@@ -2,10 +2,12 @@
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import type {
   ComputerProfile,
+  SharingIdentity,
   HostStatus,
   SwitchResult,
 } from '../../shared/protocol'
 import Icon from './Icon.vue'
+import SharingPanel from './SharingPanel.vue'
 import { t, diagnostic, locale, setLocale } from './i18n'
 import { decodeProfile, encodeProfile, platformLabel } from './profiles'
 import {
@@ -35,6 +37,8 @@ import { REPAIR_KEY, readRepairProgress } from './system-setup'
 const settingsPage =
   new URLSearchParams(location.search).get('settings') === '1'
 const status = ref<HostStatus | null>(null)
+const sharingIdentity = ref<SharingIdentity | null>(null)
+const sharingRunning = ref(false)
 const busy = ref(false)
 const refreshing = ref(false)
 const hostError = ref('')
@@ -131,6 +135,7 @@ const ownProfile = computed<ComputerProfile | null>(() => {
   return {
     version: 1,
     name: localTitle.value.trim(),
+    ...(sharingIdentity.value ? { sharing: sharingIdentity.value } : {}),
     platform: status.value.platform,
     input: settings.value.localInput,
     monitor: {
@@ -881,7 +886,7 @@ onUnmounted(() => {
             @click="switchComputer"
           >
             <span>{{
-              t(busy ? '正在发送指令…' : `切换到 ${settings.peer.name}`)
+              t(busy ? '正在发送指令…' : sharingRunning ? '仅切换画面' : `切换到 ${settings.peer.name}`)
             }}</span
             ><Icon
               :name="busy ? 'refresh' : 'arrow'"
@@ -900,7 +905,7 @@ onUnmounted(() => {
           <p
             v-else-if="settings.peer && settings.localInput !== null"
             class="action-hint"
-          >{{ t("切换画面；键盘与鼠标保持独立。") }}</p>
+          >{{ t(sharingRunning ? '使用下方快捷键可同时切换键鼠和画面。' : '切换画面；键盘与鼠标保持独立。') }}</p>
         </div>
 
         <div
@@ -923,6 +928,9 @@ onUnmounted(() => {
           }}</span>
         </div>
 
+        <SharingPanel :host="status" :settings="settings" :compact="!settingsPage"
+          @identity="sharingIdentity = $event" @running="sharingRunning = $event"
+          @upgrade="upgrading = true; checkInstallation()" />
         <section v-if="settingsPage" class="setup-notes">
           <div>
             <Icon name="info" :size="19" />

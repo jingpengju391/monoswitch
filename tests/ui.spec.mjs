@@ -476,3 +476,49 @@ test.describe('English and Chinese interface', () => {
     await page.screenshot({ path: 'docs/screenshots/onboarding-en.png', fullPage: true })
   })
 })
+
+test('keyboard sharing exports identity, requires confirmation and owns start/stop', async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 1000 })
+  await page.addInitScript(() => {
+    const identity = { id: 'ms-' + 'a'.repeat(16), fingerprint: 'a'.repeat(64) }
+    const peer = { version: 1, name: 'Windows PC', platform: { os: 'windows', arch: 'x86_64', hostname: 'remote' }, input: 17, monitor: { name: 'Dell' }, sharing: { id: 'ms-' + 'b'.repeat(16), fingerprint: 'b'.repeat(64) } }
+    const storage = { 'monoswitch.settings': { displayId: 'test', localName: 'Manjaro', localInput: 15, peer } }
+    const sharing = { installed: true, running: false, connected: false, active: false, identity: null }
+    const calls = []
+    window.__sharingCalls = calls
+    Object.assign(window.chrome, {
+      runtime: { id: 'test-extension', getPlatformInfo: async () => ({ os: 'linux', arch: 'x86-64' }), getURL: path => new URL(path, location.href).href,
+        sendMessage: async message => {
+          const request = message.request
+          if (!request) return { ok: true, data: {} }
+          calls.push(JSON.parse(JSON.stringify(message)))
+          if (request.action === 'status') return { ok: true, data: { version: '0.1.0', platform: { os: 'linux', arch: 'x86_64', hostname: 'Manjaro' }, backend: { name: 'ddcutil', available: true }, warnings: [], displays: [{ id: 'test', name: 'Dell', currentInput: 15, canSwitch: true, inputDetection: 'reported', inputs: [{ value: 15, label: 'DP' }, { value: 17, label: 'HDMI' }] }] } }
+          if (request.action === 'sharingIdentity') { sharing.identity = identity; return { ok: true, data: identity } }
+          if (request.action === 'sharingStart') Object.assign(sharing, { running: true, connected: true, active: true })
+          if (request.action === 'sharingStop') Object.assign(sharing, { running: false, connected: false })
+          return { ok: true, data: structuredClone(sharing) }
+        } },
+      storage: { local: { get: async () => structuredClone(storage), set: async value => Object.assign(storage, value) }, onChanged: { addListener() {}, removeListener() {} } },
+      commands: { getAll: async () => [] },
+    })
+  })
+  await page.goto('/?settings=1')
+  const start = page.getByRole('button', { name: '开启键鼠共享', exact: true })
+  await expect(start).toBeDisabled()
+  await page.getByRole('button', { name: '准备键鼠配对' }).click()
+  const exported = await page.getByRole('textbox', { name: '本机导出配置' }).inputValue()
+  expect(JSON.parse(Buffer.from(exported.slice(4), 'base64').toString()).sharing.fingerprint).toBe('a'.repeat(64))
+  await expect(start).toBeDisabled()
+  await page.getByLabel('我确认配置来自自己的另一台电脑，允许它参与键鼠共享。').check()
+  await start.click()
+  await expect(page.getByText('已加密连接', { exact: true })).toBeVisible()
+  const calls = await page.evaluate(() => window.__sharingCalls)
+  expect(calls.find(call => call.request.action === 'sharingStart')).toMatchObject({ confirmed: true, request: { config: { role: 'server', followDisplay: true, displayId: 'test', input: 15 } } })
+  await page.screenshot({ path: 'docs/screenshots/sharing-connected.png', fullPage: true })
+  await page.getByRole('button', { name: '停止键鼠共享', exact: true }).click()
+  await expect(start).toBeVisible()
+  await page.screenshot({ path: 'docs/screenshots/sharing-settings.png', fullPage: true })
+  await page.getByRole('combobox', { name: /语言|Language/ }).selectOption('en')
+  await expect(page.getByRole('heading', { name: 'Keyboard and mouse sharing' })).toBeVisible()
+  await page.screenshot({ path: 'docs/screenshots/sharing-settings-en.png', fullPage: true })
+})

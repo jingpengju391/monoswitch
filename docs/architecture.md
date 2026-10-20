@@ -12,7 +12,7 @@ flowchart LR
   LIN --> MON
 ```
 
-每台电脑使用同一套扩展、各自系统编译的 Rust 程序和本地设置。没有常驻 HTTP 服务，不依赖局域网互通。Chrome 按需启动本地程序。对端电脑信息通过显式配对码交换，系统来自各自主机报告。
+每台电脑使用同一套扩展、各自系统编译的 Rust 程序和本地设置。没有常驻 HTTP 服务，显示器控制不依赖局域网互通。Chrome 按需启动本地程序。对端电脑信息通过显式配对码交换，系统来自各自主机报告。
 
 ## 安装流程
 
@@ -59,3 +59,11 @@ TypeScript 合约位于 `shared/protocol.ts`。Native Messaging 使用本机字�
 - [Windows SetVCPFeature](https://learn.microsoft.com/en-us/windows/win32/api/lowlevelmonitorconfigurationapi/nf-lowlevelmonitorconfigurationapi-setvcpfeature)
 - [ddcutil getvcp](https://www.ddcutil.com/command_getvcp/) 与 [setvcp](https://www.ddcutil.com/command_setvcp/)
 - [BetterDisplay CLI](https://github.com/waydabber/BetterDisplay/wiki/Integration-features,-CLI)
+
+## 可选键鼠共享
+
+显示器控制仍独立工作；键鼠共享需要两机局域网互通。扩展后台通过一个长连接 Native Messaging port 管理 Rust `sharing::Session`。Session 独占配置锁并拥有独立 Deskflow 子进程；弹窗关闭不终止后台连接，显式停止或原生连接 EOF 时杀死并回收子进程。启动失败、断线和退出分别反馈，进程启动不等于已连接。
+
+Deskflow 是外部程序，不复制其源码、不修改用户现有 Deskflow 配置。MonoSwitch 数据目录下单独保存 TLS 私钥、证书和 INI 配置。MS1 配置可选携带 SHA-256 指纹及由指纹派生的身份；双方仅信任对端证书，关闭剪贴板。旧 MS1 配置仍可用于显示器切换。固定热键在 Deskflow 内切换焦点，Rust 读取 INFO/IPC 焦点记录并按用户选项发送本机 DDC 命令；不抓取或记录按键内容。
+
+Linux 用固定 pkexec 脚本安装发行版 Deskflow 软件包。Windows/macOS 提供官方下载入口。网络端口默认 TCP 24800，可配置；接收端地址限私有 IPv4、IPv4 链路本地或 IPv6 ULA。无需账号、外部服务器或 HTTP 控制接口。相关协议依据 [Deskflow 1.26 配置文档](https://github.com/deskflow/deskflow/blob/v1.26.0/docs/Configuration.md)。

@@ -41,6 +41,11 @@ export interface SwitchResult {
 
 export type NativeRequest =
   | { action: 'status' }
+  | { action: 'sharingStatus' }
+  | { action: 'sharingIdentity' }
+  | { action: 'sharingInstall' }
+  | { action: 'sharingStart'; config: SharingConfig }
+  | { action: 'sharingStop' }
   | { action: 'repair' }
   | { action: 'switch'; displayId: string; input: number }
 
@@ -55,6 +60,7 @@ export interface ComputerProfile {
   platform: PlatformInfo
   input: number
   monitor: { name: string; serial?: string }
+  sharing?: SharingIdentity
 }
 
 export interface Settings {
@@ -62,4 +68,25 @@ export interface Settings {
   localName: string
   localInput: number | null
   peer: ComputerProfile | null
+}
+
+export interface SharingIdentity { id: string; fingerprint: string }
+export interface SharingConfig {
+  role: 'server' | 'client'
+  peer: SharingIdentity
+  address: string
+  port: number
+  followDisplay: boolean
+  displayId: string
+  input: number
+}
+export interface SharingStatus {
+  installed: boolean
+  running: boolean
+  connected: boolean
+  active: boolean
+  role: 'server' | 'client' | null
+  identity: SharingIdentity | null
+  lastError: string | null
+  displayMessage: string | null
 }

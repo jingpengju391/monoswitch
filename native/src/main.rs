@@ -7,6 +7,7 @@ mod inputs;
 mod linux_setup;
 mod model;
 mod platform;
+mod sharing;
 
 use model::{AppError, Request};
 use serde_json::{Value, json};
@@ -19,16 +20,35 @@ fn response(result: Result<Value, AppError>) -> Value {
     }
 }
 
-fn handle(bytes: &[u8]) -> Value {
+fn handle_session(bytes: &[u8], sharing: &mut sharing::Session) -> Value {
     let result = (|| {
         let request: Request = serde_json::from_slice(bytes).map_err(|e| {
-            AppError::new(
-                "INVALID_REQUEST",
-                "请求格式不正确。仅支持 status、repair 和 switch。",
-            )
-            .details(e.to_string())
+            AppError::new("INVALID_REQUEST", "请求格式不正确或操作不受支持。")
+                .details(e.to_string())
         })?;
         match request {
+            Request::SharingInstall {} => {
+                #[cfg(target_os = "linux")]
+                {
+                    linux_setup::install_sharing()
+                        .map_err(|m| AppError::new("SHARING_INSTALL_FAILED", m))?;
+                    Ok(json!(sharing.status()?))
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    Err(AppError::new(
+                        "UNSUPPORTED",
+                        "请安装官方 Deskflow 程序后重新检测。",
+                    ))
+                }
+            }
+            Request::SharingStatus {} => Ok(json!(sharing.status()?)),
+            Request::SharingIdentity {} => Ok(json!(sharing::identity()?)),
+            Request::SharingStart { config } => Ok(json!(sharing.start(config)?)),
+            Request::SharingStop {} => {
+                sharing.stop();
+                Ok(json!(sharing.status()?))
+            }
             Request::Status {} => Ok(json!(platform::status()?)),
             Request::Repair {} => {
                 #[cfg(target_os = "linux")]
@@ -59,9 +79,10 @@ fn handle(bytes: &[u8]) -> Value {
 }
 
 fn serve(reader: &mut impl io::Read, writer: &mut impl io::Write) -> io::Result<()> {
+    let mut sharing = sharing::Session::default();
     loop {
         match framing::read_frame(reader) {
-            Ok(Some(bytes)) => framing::write_frame(writer, &handle(&bytes))?,
+            Ok(Some(bytes)) => framing::write_frame(writer, &handle_session(&bytes, &mut sharing))?,
             Ok(None) => return Ok(()),
             Err(error) => {
                 framing::write_frame(
@@ -94,6 +115,9 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn handle(bytes: &[u8]) -> Value {
+        handle_session(bytes, &mut sharing::Session::default())
+    }
     #[test]
     fn invalid_json_and_unknown_actions_do_not_touch_hardware() {
         for request in [
