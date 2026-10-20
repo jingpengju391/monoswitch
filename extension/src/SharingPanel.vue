@@ -4,6 +4,7 @@ import type { ComputerProfile, HostStatus, SharingIdentity, SharingStatus } from
 import { demoMode, request } from './bridge'
 import { t, diagnostic } from './i18n'
 import Icon from './Icon.vue'
+import CopyButton from './CopyButton.vue'
 
 const props = defineProps<{ host: HostStatus; profile: ComputerProfile | null }>()
 const emit = defineEmits<{ identity: [SharingIdentity | null]; upgrade: []; running: [boolean] }>()
@@ -12,7 +13,6 @@ const pending = ref(false)
 const error = ref('')
 const unsupported = ref(false)
 const code = ref('')
-const copied = ref(false)
 let timer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
 function apply(value: SharingStatus) {
@@ -39,7 +39,7 @@ async function refresh() {
 }
 async function run(action: 'sharingInstall' | 'sharingStop' | 'sharingPairHost' | 'sharingPairJoin') {
   if (pending.value) return
-  pending.value = true; error.value = ''; copied.value = false
+  pending.value = true; error.value = ''
   try {
     const message = action === 'sharingPairHost' || action === 'sharingPairJoin'
       ? { action, profile: props.profile!, ...(action === 'sharingPairJoin' ? { code: code.value.trim() } : {}) }
@@ -53,10 +53,6 @@ async function run(action: 'sharingInstall' | 'sharingStop' | 'sharingPairHost' 
     apply(response.data)
   } catch (e) { error.value = e instanceof Error ? e.message : '无法启动键鼠共享。' }
   finally { pending.value = false }
-}
-async function copyCode() {
-  try { await navigator.clipboard.writeText(state.value?.pairingCode || ''); copied.value = true }
-  catch { error.value = '复制失败，请选中配对码手动复制。' }
 }
 onMounted(() => void refresh())
 onUnmounted(() => { disposed = true; clearTimeout(timer) })
@@ -94,7 +90,8 @@ onUnmounted(() => { disposed = true; clearTimeout(timer) })
           <h3>{{ t('等待另一台输入配对码') }}</h3>
           <p>{{ t('把下面的配对码发送到 HDMI 那台电脑，在它的键鼠共享区域粘贴并连接。只需这一次，不用再把配置复制回来。') }}</p>
           <textarea :value="state.pairingCode" readonly rows="3" :aria-label="t('一次性配对码')" />
-          <button class="primary-button" @click="copyCode">{{ t(copied ? '已复制配对码' : '复制配对码') }}</button>
+          <CopyButton :text="state.pairingCode" label="复制配对码"
+            @start="error = ''" @error="error = '复制失败，请选中配对码手动复制。'" />
           <p class="privacy-note">{{ t('配对码五分钟有效，仅发给自己的另一台电脑。配对成功后两边会自动连接。') }}</p>
           <button class="text-button" :disabled="pending" @click="run('sharingStop')">{{ t('取消配对') }}</button>
         </template>

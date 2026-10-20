@@ -1,4 +1,7 @@
 export const english: Record<string, string> = {
+  "已复制": "Copied",
+  "正在复制…": "Copying…",
+  "显示器序列号不一致。请确认两台电脑连接同一显示器后重新配对。": "Monitor serial numbers differ. Connect both computers to the same monitor and pair again.",
   "连接管理": "Connection settings",
   "连接详情": "Connection details",
   "返回": "Back",

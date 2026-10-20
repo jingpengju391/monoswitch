@@ -474,36 +474,6 @@ small {
   margin-top: 12px;
   font-size: 10px;
 }
-.export-box {
-  border-top: 1px solid var(--line);
-  padding-top: 19px;
-  margin-top: 22px;
-}
-.export-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 9px;
-}
-.export-heading h3 {
-  font-size: 11px;
-  font-weight: 500;
-  color: #68765e;
-}
-.export-heading .text-button {
-  font-size: 10px;
-}
-.export-box textarea {
-  font-size: 9px;
-  line-height: 1.6;
-  color: #8a9780;
-}
-.export-box > p {
-  font-size: 9px;
-  color: #9aa38f;
-  margin-top: 8px;
-  line-height: 1.7;
-}
 .secondary-button {
   display: flex;
   align-items: center;
@@ -527,12 +497,6 @@ small {
   line-height: 1.9;
   color: #98a18d;
   margin-top: 15px;
-}
-.inline-error {
-  font-size: 10px;
-  line-height: 1.7;
-  color: #a76754;
-  margin-top: 8px;
 }
 .spinning {
   animation: spin 0.9s linear infinite;
@@ -675,7 +639,7 @@ small {
 .unified-page .setup-content { padding: 28px; }
 .unified-page .installer-platform { margin-bottom: 16px; }
 .unified-page .advanced-options { background: transparent; }
-.manual-pairing, .sharing-management { margin-top: 18px; }
+.sharing-management { margin-top: 18px; }
 .sharing-management .privacy-note { margin-bottom: 12px; }
 .unified-page .sharing-panel .panel-heading { flex-wrap: wrap; gap: 10px; }
 .unified-page .sharing-panel .panel-heading p { display: none; }
@@ -710,3 +674,6 @@ small {
   .unified-page .sharing-panel { padding: 28px; }
   .sharing-fields { gap: 28px; }
 }
+
+.copy-button.copy-success { background: #32755c; }
+.copy-button.copy-success:hover { background: #28634d; }

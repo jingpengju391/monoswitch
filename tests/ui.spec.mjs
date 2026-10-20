@@ -158,22 +158,13 @@ test('compact control panel, explicit demo and safe switch feedback', async ({ p
   await page.screenshot({ path: 'docs/screenshots/control.png', fullPage: true })
 })
 
-test('pairing rejects malformed profiles and exports actual local platform', async ({ page }) => {
+test('local configuration is generated automatically instead of exposing manual exchange', async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 1000 })
   await page.goto('/?settings=1&demo=1')
   await page.getByText('更多选项', { exact: true }).click()
-  await page.getByText('仅切画面时，手动交换配置', { exact: true }).click()
-  const exported = await page.getByRole('textbox', { name: '本机导出配置' }).inputValue()
-  expect(exported).toMatch(/^MS1\./)
-  const own = JSON.parse(Buffer.from(exported.slice(4), 'base64').toString('utf8'))
-  expect(own.platform.os).toBe('linux')
-  expect(own.platform.distribution).toBe('Manjaro Linux')
-  await page.getByPlaceholder('粘贴以 MS1. 开头的配置…').fill('MS1.invalid')
-  await page.getByRole('button', { name: '更新配置' }).click()
-  await expect(page.getByRole('alert')).toBeVisible()
-  await page.getByPlaceholder('粘贴以 MS1. 开头的配置…').fill(exported)
-  await page.getByRole('button', { name: '更新配置' }).click()
-  await expect(page.getByText('另一台电脑已添加，配置自动保存在本机。')).toBeVisible()
+  await expect(page.getByRole('textbox', { name: '本机导出配置' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '复制配置' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '切换到 MacBook Pro' })).toBeEnabled()
   await page.screenshot({ path: 'docs/screenshots/settings.png', fullPage: true })
 })
 
@@ -281,6 +272,11 @@ for (const clipboardFails of [false, true]) {
     } else {
       await expect(page.getByRole('status').filter({ hasText: '已复制，请在终端粘贴并回车' })).toBeVisible()
       expect(await page.evaluate(() => window.__monoswitchDownloads.calls.clipboard)).toEqual([await command.textContent()])
+      const copied = page.getByRole('button', { name: '已复制', exact: true })
+      await expect(copied).toBeVisible()
+      await expect(copied.locator('svg path')).toHaveAttribute('d', 'm5 12 4 4L19 6')
+      await expect(page.getByRole('button', { name: '复制安装命令', exact: true })).toBeVisible({ timeout: 4000 })
+
     }
     // Copying is not executing: keep waiting until the host really responds.
     await expect(page.getByRole('status').filter({ hasText: '正在等待组件连接' })).toBeVisible()
@@ -517,7 +513,7 @@ test('keyboard sharing pairs once with a code and explains when switching is rea
   await connect.click()
   await expect(page.getByText('已连接，可以切换', { exact: true })).toBeVisible()
   const calls = await page.evaluate(() => window.__sharingCalls)
-  expect(calls.find(call => call.request.action === 'sharingPairJoin')).toMatchObject({ confirmed: true, request: { code: 'MS2.peer-code' } })
+  expect(calls.find(call => call.request.action === 'sharingPairJoin')).toMatchObject({ confirmed: true, request: { code: 'MS2.peer-code', profile: { name: 'Manjaro', platform: { os: 'linux', hostname: 'Manjaro' }, input: 15, monitor: { name: 'Dell' } } } })
   await page.screenshot({ path: 'docs/screenshots/sharing-connected.png', fullPage: true })
   await expect(page.locator('.local-settings')).not.toHaveAttribute('open')
   await expect(page.locator('.advanced-options')).not.toHaveAttribute('open')

@@ -7,9 +7,10 @@ import type {
   SwitchResult,
 } from '../../shared/protocol'
 import Icon from './Icon.vue'
+import CopyButton from './CopyButton.vue'
 import SharingPanel from './SharingPanel.vue'
 import { t, diagnostic, locale, setLocale } from './i18n'
-import { decodeProfile, encodeProfile, platformLabel } from './profiles'
+import { platformLabel } from './profiles'
 import {
   activeDisplay,
   inputLabel,
@@ -49,8 +50,6 @@ const settingsSync = createSettingsSync(saveSettings, () => {
   error.value = '配置保存失败，请重试。'
 })
 const { settings } = settingsSync
-const profileText = ref('')
-const profileError = ref('')
 const confirmed = ref(false)
 const latest = ref<Operation | null>(null)
 const shortcut = ref('Alt + Shift + M')
@@ -132,14 +131,6 @@ const ownProfile = computed<ComputerProfile | null>(() => {
     },
   }
 })
-const exportText = computed(() => {
-  if (!ownProfile.value) return ''
-  try {
-    return encodeProfile(ownProfile.value)
-  } catch {
-    return ''
-  }
-})
 const visibleOperation = computed(() =>
   latest.value && Date.now() - latest.value.timestamp < 10 * 60 * 1000
     ? latest.value
@@ -218,19 +209,6 @@ function checkInstallation(): void {
 
 function downloadInstaller(): void {
   void installerDownload.value?.download()
-}
-
-async function copyInstallCommand(): Promise<void> {
-  if (!installCommand.value) return
-  installCopyError.value = ''
-  try {
-    await navigator.clipboard.writeText(installCommand.value)
-    if (disposed) return
-    installCommandCopied.value = true
-    checkInstallation()
-  } catch {
-    if (!disposed) installCopyError.value = '复制失败，请选中上方命令手动复制。'
-  }
 }
 
 function openInstaller(): void {
@@ -345,26 +323,6 @@ function openShortcuts(): void {
     notice.value = '加载扩展后，在 chrome://extensions/shortcuts 中设置快捷键。'
 }
 
-async function copyProfile(): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(exportText.value)
-    notice.value = '本机配置已复制，可粘贴到另一台电脑。'
-  } catch {
-    notice.value = '请选中下方配置文本并手动复制。'
-  }
-}
-
-function importProfile(): void {
-  profileError.value = ''
-  try {
-    settings.value.peer = decodeProfile(profileText.value)
-    profileText.value = ''
-    notice.value = '另一台电脑已添加，配置自动保存在本机。'
-  } catch (cause) {
-    profileError.value = cause instanceof Error ? cause.message : '配置无效。'
-  }
-}
-
 function onStorage(
   changes: Record<string, chrome.storage.StorageChange>,
   area: string,
@@ -458,10 +416,10 @@ onUnmounted(() => {
             <code tabindex="0" :aria-label='t("Linux 安装命令")'>{{ installCommand }}</code>
           </div>
           <p v-if="installCopyError" class="message danger" role="alert">{{ t(installCopyError) }}</p>
-          <button v-if="linuxInstall && installCommand" class="primary-button" @click="copyInstallCommand">
-            {{ t(installCommandCopied ? '再次复制安装命令' : '复制安装命令') }}
-            <Icon name="copy" :size="17" />
-          </button>
+          <CopyButton v-if="linuxInstall && installCommand" :text="installCommand" label="复制安装命令"
+            @start="installCopyError = ''; installCommandCopied = false"
+            @copied="installCommandCopied = true; checkInstallation()"
+            @error="installCopyError = '复制失败，请选中上方命令手动复制。'" />
           <button v-else-if="linuxInstall" class="primary-button" @click="installerDownload?.show()">{{ t("在文件夹中显示") }}<Icon name="external" :size="17" />
           </button>
           <button v-else-if="installer && downloadReady" class="primary-button" @click="openInstaller">
@@ -568,18 +526,11 @@ onUnmounted(() => {
           <button class="text-button" :disabled="refreshing || busy" @click="refresh"><Icon name="refresh" :size="15" :class="{ spinning: refreshing }" />{{ t('刷新显示器状态') }}</button>
         </details>
         <div v-if="display?.warning" class="message warning">{{ diagnostic(display.warning) }}</div>
-        <div v-if="sourceMismatch" class="message danger">{{ t('显示器序列号不一致。请确认两台电脑连接同一显示器后重新导出配置。') }}</div>
+        <div v-if="sourceMismatch" class="message danger">{{ t('显示器序列号不一致。请确认两台电脑连接同一显示器后重新配对。') }}</div>
         <details class="panel advanced-options">
           <summary>{{ t('更多选项') }}</summary>
           <label class="field"><span>{{ t('电脑名称') }}</span><input v-model="settings.localName" :placeholder="status.platform.hostname" maxlength="60" /></label>
           <button v-if="!demoMode" class="secondary-button" @click="upgrading = true; checkInstallation()">{{ t('重新下载组件') }}</button>
-          <details class="manual-pairing">
-            <summary>{{ t('仅切画面时，手动交换配置') }}</summary>
-            <div class="export-box"><div class="export-heading"><h3>{{ t('本机配置') }}</h3><button class="text-button" :disabled="!exportText" @click="copyProfile"><Icon name="copy" :size="15" />{{ t('复制配置') }}</button></div><textarea :value="exportText" readonly rows="3" :aria-label="t('本机导出配置')" :placeholder="t('选择显示器与本机接口后，即可生成配置。')" /></div>
-            <label class="field"><span>{{ t(settings.peer ? '更新对端配置' : '另一台电脑的配置') }}</span><textarea v-model="profileText" rows="3" maxlength="8192" :placeholder="t('粘贴以 MS1. 开头的配置…')" /></label>
-            <p v-if="profileError" class="inline-error" role="alert">{{ t(profileError) }}</p>
-            <button class="secondary-button" :disabled="!profileText.trim()" @click="importProfile">{{ t(settings.peer ? '更新配置' : '导入配置') }}</button>
-          </details>
           <p v-if="monitorUnverified" class="privacy-note">{{ t('缺少显示器序列号，无法核对是否为同一台显示器。请按实际接线确认。') }}</p>
           <button v-if="settings.peer && !sharingRunning" class="text-button" @click="settings.peer = null">{{ t('移除另一台电脑') }}</button>
         </details>
