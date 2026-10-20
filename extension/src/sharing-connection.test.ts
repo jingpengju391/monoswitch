@@ -51,3 +51,27 @@ it('closes a stuck session instead of leaving input capture running', async () =
   expect((await pending).ok).toBe(false)
   expect(f.port.disconnect).toHaveBeenCalledOnce()
 })
+it('reconnects once when an old host rejects a new pairing action', async () => {
+  const f = fixture()
+  const message = { action: 'sharingPairHost', profile: {} } as Parameters<typeof f.connection.request>[0]
+  const result = f.connection.request(message)
+  await Promise.resolve()
+  f.reply({ ok: false, error: { code: 'INVALID_REQUEST', message: 'Old host' } })
+  await vi.waitFor(() => expect(f.api.runtime.connectNative).toHaveBeenCalledTimes(2))
+  expect(f.port.postMessage).toHaveBeenLastCalledWith(message)
+  f.reply({ ok: true, data: { pairingCode: 'MS2.test' } })
+  expect(await result).toMatchObject({ ok: true })
+  f.connection.close()
+})
+it('does not loop if the installed host also rejects pairing', async () => {
+  const f = fixture()
+  const result = f.connection.request({ action: 'sharingPairHost', profile: {} } as Parameters<typeof f.connection.request>[0])
+  await Promise.resolve()
+  const rejection = { ok: false, error: { code: 'INVALID_REQUEST', message: 'Unsupported' } }
+  f.reply(rejection)
+  await vi.waitFor(() => expect(f.api.runtime.connectNative).toHaveBeenCalledTimes(2))
+  f.reply(rejection)
+  expect(await result).toEqual(rejection)
+  expect(f.connection.connected()).toBe(false)
+  expect(f.api.runtime.connectNative).toHaveBeenCalledTimes(2)
+})

@@ -35,13 +35,13 @@ export function createSharingConnection(api = chrome) {
     })
     return current
   }
-  function request(message: NativeRequest): Promise<NativeResponse<unknown>> {
-    const next = queue.then(() => new Promise<NativeResponse<unknown>>(resolve => {
+  function exchange(message: NativeRequest): Promise<NativeResponse<unknown>> {
+    return new Promise<NativeResponse<unknown>>(resolve => {
       let timeout: ReturnType<typeof setTimeout> | undefined
       const finish = (response: NativeResponse<unknown>) => {
         clearTimeout(timeout)
         resolve(response)
-        if (message.action === 'sharingStop' || (message.action === 'sharingStart' && !response.ok)) close()
+        if (message.action === 'sharingStop' || (!response.ok && (message.action === 'sharingStart' || response.error.code === 'INVALID_REQUEST'))) close()
       }
       try {
         const current = open()
@@ -50,7 +50,17 @@ export function createSharingConnection(api = chrome) {
         timeout = setTimeout(close, 15_000)
         current.postMessage(message)
       } catch { close(); finish(failed()) }
-    }))
+    })
+  }
+  function request(message: NativeRequest): Promise<NativeResponse<unknown>> {
+    const next = queue.then(async () => {
+      const response = await exchange(message)
+      // An installer can update the manifest while an old native process owns this port.
+      // INVALID_REQUEST means the operation did not execute; retry pairing once on a fresh host.
+      if (!response.ok && response.error.code === 'INVALID_REQUEST' &&
+          (message.action === 'sharingPairHost' || message.action === 'sharingPairJoin')) return exchange(message)
+      return response
+    })
     queue = next.catch(() => {})
     return next
   }
