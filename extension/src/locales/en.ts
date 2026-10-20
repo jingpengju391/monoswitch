@@ -1,4 +1,12 @@
 export const english: Record<string, string> = {
+  "尚未检测到 Deskflow，请安装键鼠组件后重新检测。": "Deskflow was not detected. Install the input component and check again.",
+  "请先点击“准备键鼠配对”，生成本机身份。": "Click Prepare input pairing to create this computer’s identity.",
+  "对端配置不含键鼠身份：请在另一台电脑准备键鼠配对后，重新复制并导入它的配置。": "The peer profile has no input identity. Prepare input pairing on the other computer, then copy and import its profile again.",
+  "请勾选上方的配对确认，允许另一台电脑参与共享。": "Check the pairing confirmation above to allow the other computer to share input.",
+  "画面联动需要选择本机显示器和输入接口；也可先取消画面联动，仅测试键鼠。": "Display linking needs a local display and input. You can disable linking to test keyboard and mouse sharing alone.",
+  "请填写发送端的局域网 IP。": "Enter the sender’s local network IP address.",
+  "连接端口需为 1024 到 65535 的整数。": "The port must be an integer from 1024 to 65535.",
+
   "重新下载组件": "Download component again",
   "本地组件": "Local component",
   "返回设置": "Back to settings",

@@ -21,9 +21,19 @@ let timer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
 let loaded = false
 const paired = computed(() => Boolean(state.value?.identity && props.settings.peer?.sharing))
-const canStart = computed(() => paired.value && state.value?.installed && confirmed.value &&
-  (!follow.value || (props.settings.displayId && props.settings.localInput !== null)) &&
-  (role.value === 'server' || address.value.trim()))
+const blockers = computed(() => {
+  const reasons: string[] = []
+  if (!state.value?.installed) reasons.push('尚未检测到 Deskflow，请安装键鼠组件后重新检测。')
+  if (!state.value?.identity) reasons.push('请先点击“准备键鼠配对”，生成本机身份。')
+  if (!props.settings.peer?.sharing) reasons.push('对端配置不含键鼠身份：请在另一台电脑准备键鼠配对后，重新复制并导入它的配置。')
+  if (paired.value && !confirmed.value) reasons.push('请勾选上方的配对确认，允许另一台电脑参与共享。')
+  if (follow.value && (!props.settings.displayId || props.settings.localInput === null)) reasons.push('画面联动需要选择本机显示器和输入接口；也可先取消画面联动，仅测试键鼠。')
+  if (role.value === 'client' && !address.value.trim()) reasons.push('请填写发送端的局域网 IP。')
+  if (!Number.isInteger(port.value) || port.value < 1024 || port.value > 65535) reasons.push('连接端口需为 1024 到 65535 的整数。')
+  return reasons
+})
+const canStart = computed(() => blockers.value.length === 0)
+
 
 function apply(value: SharingStatus) {
   state.value = value
@@ -155,6 +165,9 @@ onUnmounted(() => { disposed = true; clearTimeout(timer) })
           </details>
           <p v-if="!paired" class="privacy-note">{{ t('请先完成两台电脑的键鼠配对信息交换。') }}</p>
           <label v-else class="confirmation"><input v-model="confirmed" type="checkbox" :disabled="pending" /><span>{{ t('我确认配置来自自己的另一台电脑，允许它参与键鼠共享。') }}</span></label>
+          <div v-if="blockers.length" class="message warning" role="status">
+            <ul><li v-for="reason in blockers" :key="reason">{{ t(reason) }}</li></ul>
+          </div>
           <button class="primary-button" :disabled="!canStart || pending" @click="start">{{ t(pending ? '正在处理…' : '开启键鼠共享') }}</button>
           <p class="privacy-note">{{ t('仅在开启后监听网络。两台电脑需运行 Chrome；发送端不能休眠。macOS 需授权辅助功能，Wayland 可能需要系统授权。') }}</p>
         </template>
