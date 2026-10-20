@@ -80,8 +80,8 @@ export function createInstallerDownload(installer: Installer, api = chrome) {
     }
   }
 
-  async function download(): Promise<void> {
-    if (disposed || state.value.phase === 'downloading' || state.value.phase === 'ready') return
+  async function download(force = false): Promise<void> {
+    if (disposed || state.value.phase === 'downloading' || (state.value.phase === 'ready' && !force)) return
     if (installer.extensionId !== api.runtime.id) {
       state.value.error = '安装器与当前扩展不匹配，请重新加载扩展。'
       return

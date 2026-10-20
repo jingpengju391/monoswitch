@@ -1,4 +1,11 @@
 export const english: Record<string, string> = {
+  "重新下载组件": "Download component again",
+  "本地组件": "Local component",
+  "返回设置": "Back to settings",
+  "更新或重新安装组件": "Update or reinstall component",
+  "运行安装器即可更新，无需删除旧组件。完成后返回设置，原有配置会保留。": "Run the installer to update without removing the existing component. Return to settings when finished; your configuration is preserved.",
+  "更新或重新安装时使用，已有显示器和配对配置会保留。": "Use this to update or reinstall. Your display and pairing settings are preserved.",
+
   "请求格式不正确或操作不受支持。": "Invalid request format or unsupported action.",
   "键鼠共享程序已退出（": "The input sharing process exited (",
   "），请检查权限和连接。": "). Check permissions and the connection.",

@@ -173,7 +173,6 @@ async function refresh(): Promise<void> {
       return
     }
     status.value = response.data
-    if (upgrading.value && response.data.systemSetup) upgrading.value = false
     if (waitingForInstall.value && !upgrading.value) notice.value = '本地组件已连接，可以继续设置显示器。'
     if (!upgrading.value) stopPolling()
     if (!settings.value.displayId && response.data.displays.length === 1)
@@ -214,7 +213,8 @@ async function repairSystem(): Promise<void> {
 function checkInstallation(): void {
   stopPolling()
   installTimedOut.value = false
-  if (status.value && !upgrading.value) return
+  if (upgrading.value) { void refresh(); return }
+  if (status.value) return
   waitingForInstall.value = true
   void refresh()
   const deadline = Date.now() + 600_000
@@ -529,8 +529,9 @@ onUnmounted(() => {
           </span>
         </aside>
         <div class="setup-content">
-          <p class="section-kicker">{{ t("首次设置 · 仅需一次") }}</p>
+          <p class="section-kicker">{{ t(upgrading ? "更新或重新安装组件" : "首次设置 · 仅需一次") }}</p>
           <h2>{{ t(setupTitle) }}</h2>
+          <p v-if="upgrading">{{ t("运行安装器即可更新，无需删除旧组件。完成后返回设置，原有配置会保留。") }}</p>
           <p v-if="linuxInstall && installCommand">{{ t("已下载 Install MonoSwitch.run。在文件属性中允许执行后双击，或复制下方命令运行；成功后安装器自动删除。") }}</p>
           <p v-else-if="linuxInstall">{{ t("在文件夹中找到安装器，在文件属性中允许执行，再双击运行。") }}</p>
           <p v-else-if="installerOpened && archiveInstaller">{{ t("解压后双击 Install MonoSwitch，按提示授权。成功后安装器会自动删除。") }}</p>
@@ -574,6 +575,8 @@ onUnmounted(() => {
             }}
           </p>
           <div class="install-actions">
+            <button v-if="installer && downloadReady" class="text-button" @click="installerDownload?.download(true)">{{ t("重新下载") }}</button>
+            <button v-if="upgrading" class="text-button" @click="upgrading = false; stopPolling(); refresh()">{{ t("返回设置") }}</button>
             <button v-if="downloadReady && (!linuxInstall || installCommand)" class="text-button" @click="installerDownload?.show()">{{ t("在文件夹中显示") }}</button>
             <button class="text-button" :disabled="refreshing" @click="checkInstallation">
               {{ t(refreshing ? '检测中…' : downloadState.phase === 'idle' ? '已安装，重新检测' : '重新检测') }}
@@ -931,6 +934,13 @@ onUnmounted(() => {
         <SharingPanel :host="status" :settings="settings" :compact="!settingsPage"
           @identity="sharingIdentity = $event" @running="sharingRunning = $event"
           @upgrade="upgrading = true; checkInstallation()" />
+        <section v-if="settingsPage && !demoMode" class="panel">
+          <div class="export-heading">
+            <h3>{{ t("本地组件") }}</h3>
+            <button class="text-button" @click="upgrading = true; checkInstallation()">{{ t("重新下载组件") }}</button>
+          </div>
+          <p class="privacy-note">{{ t("更新或重新安装时使用，已有显示器和配对配置会保留。") }}</p>
+        </section>
         <section v-if="settingsPage" class="setup-notes">
           <div>
             <Icon name="info" :size="19" />

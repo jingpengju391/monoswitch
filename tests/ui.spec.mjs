@@ -522,3 +522,25 @@ test('keyboard sharing exports identity, requires confirmation and owns start/st
   await expect(page.getByRole('heading', { name: 'Keyboard and mouse sharing' })).toBeVisible()
   await page.screenshot({ path: 'docs/screenshots/sharing-settings-en.png', fullPage: true })
 })
+
+test('installed users can reopen downloads without old host dismissing the page', async ({ page }) => {
+  await mockInstallerDownloads(page)
+  await page.addInitScript(() => {
+    chrome.runtime.sendMessage = async () => ({ ok: true, data: {
+      version: '0.1.0', platform: { os: 'linux', arch: 'x86_64', hostname: 'Installed' },
+      backend: { name: 'ddcutil', available: true }, displays: [], warnings: [],
+      systemSetup: { needsRepair: false, canRepair: true, issues: [] },
+    } })
+  })
+  await page.goto('/?settings=1')
+  await page.getByRole('button', { name: '重新下载组件', exact: true }).click()
+  await page.getByRole('button', { name: '下载组件', exact: true }).click()
+  await page.evaluate(() => window.__monoswitchDownloads.change('complete'))
+  await expect(page.getByRole('button', { name: '复制安装命令', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '重新检测', exact: true }).click()
+  await expect(page.getByRole('button', { name: '复制安装命令', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '重新下载', exact: true }).click()
+  expect(await page.evaluate(() => window.__monoswitchDownloads.calls.download.length)).toBe(2)
+  await page.getByRole('button', { name: '返回设置', exact: true }).click()
+  await expect(page.getByRole('button', { name: '重新下载组件', exact: true })).toBeVisible()
+})
