@@ -63,6 +63,16 @@ MonoSwitch 的安装流程：**自动识别系统 → 下载组件 → 按引导
 
 需要 Node.js 22.12+、npm，以及当前稳定版 Rust 工具链。Windows 编译还需要 Visual Studio C++ Build Tools，macOS 需要 Xcode Command Line Tools；Linux 需要 C 编译器/链接器。
 
+Manjaro / Arch 在首次构建前可安装编译依赖与 Rust 工具链：
+
+```sh
+sudo pacman -Syu
+sudo pacman -S --needed base-devel gcc rustup
+rustup default stable
+```
+
+安装后重新打开终端，并确认 `cc --version`、`cargo --version` 均能正常输出版本号。若构建提示 `linker cc not found`，说明系统 C 编译器尚未安装或当前终端的 `PATH` 未包含 `/usr/bin`；重新执行上述安装命令后再构建。
+
 在两台电脑分别运行：
 
 ```sh
